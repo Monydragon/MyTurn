@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="MyTurn.Domain/MyTurn.Domain.csproj" />
+  <Project Path="MyTurn.Application/MyTurn.Application.csproj" />
+  <Project Path="MyTurn.Console/MyTurn.Console.csproj" />
+  <Project Path="MyTurn.Tests/MyTurn.Tests.csproj" />
+</Solution>
