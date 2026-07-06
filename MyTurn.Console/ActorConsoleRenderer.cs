@@ -1,6 +1,7 @@
 using MyTurn.Application;
 using MyTurn.Domain;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 
 namespace MyTurn.Console;
 
@@ -242,23 +243,20 @@ internal static class ActorConsoleRenderer
 
     public static void ShowWorld(Actor actor, WorldSession session, MinimapSnapshot minimap)
     {
+        AnsiConsole.Clear();
         AnsiConsole.Write(new Rule($"[bold green]World Seed {session.Map.Seed}[/]").RuleStyle("grey"));
 
-        var room = session.CurrentRoom;
-        var details = new Table()
-            .AddColumn("Field")
-            .AddColumn("Value")
-            .AddRow("Coordinates", $"X: {session.CurrentPosition.X}, Y: {session.CurrentPosition.Y}")
-            .AddRow("Room", room.RoomType.GetDisplayName())
-            .AddRow("Status", GetRoomStatus(room))
-            .AddRow("Steps", actor.Steps.ToString());
+        var worldView = new Grid();
+        worldView.AddColumn();
+        worldView.AddColumn();
+        worldView.AddRow(new IRenderable[]
+        {
+            BuildMapPanel(session, minimap),
+            BuildWorldStatusPanel(actor, session)
+        });
 
-        AnsiConsole.Write(details);
-        AnsiConsole.Write(
-            new Panel(RenderMinimap(minimap))
-                .Header("Mini-map")
-                .BorderColor(Color.Grey));
-        AnsiConsole.MarkupLine("[grey]Move with WASD or arrow keys. Press Q or Escape to return to the hub.[/]");
+        AnsiConsole.Write(worldView);
+        AnsiConsole.MarkupLine("[grey]Move with [bold]WASD[/] or arrow keys. Press [bold]Q[/] or [bold]Escape[/] to return to the hub.[/]");
     }
 
     public static void ShowWorldMessage(ExplorationResult result)
@@ -314,28 +312,137 @@ internal static class ActorConsoleRenderer
             .AddRow("Equipped Weapon", equippedWeapon);
     }
 
-    private static string RenderMinimap(MinimapSnapshot minimap)
+    private static Panel BuildMapPanel(WorldSession session, MinimapSnapshot minimap)
     {
-        var lines = new List<string>();
+        var mapGrid = new Grid();
+
+        for (var x = minimap.MinCoordinate; x <= minimap.MaxCoordinate; x++)
+        {
+            mapGrid.AddColumn();
+        }
 
         for (var y = minimap.MaxCoordinate; y >= minimap.MinCoordinate; y--)
         {
-            var line = new string(Enumerable.Range(minimap.MinCoordinate, minimap.MaxCoordinate - minimap.MinCoordinate + 1)
-                .Select(x => minimap.GetCell(new WorldPosition(x, y)).Symbol)
-                .ToArray());
-            lines.Add(line);
+            var row = Enumerable.Range(minimap.MinCoordinate, minimap.MaxCoordinate - minimap.MinCoordinate + 1)
+                .Select(x => FormatMapCell(session, minimap.GetCell(new WorldPosition(x, y))))
+                .ToArray();
+            mapGrid.AddRow(row);
         }
 
-        return string.Join(Environment.NewLine, lines);
+        return new Panel(mapGrid)
+            .Header("Map")
+            .BorderColor(Color.Green);
     }
 
-    private static string GetRoomStatus(WorldRoom room)
+    private static Panel BuildWorldStatusPanel(Actor actor, WorldSession session)
+    {
+        var room = session.CurrentRoom;
+        var exploredRooms = session.Map.Rooms.Values.Count(currentRoom => currentRoom.IsVisited);
+        var totalRooms = session.Map.Rooms.Count;
+        var status = new Table()
+            .NoBorder()
+            .AddColumn("Field")
+            .AddColumn("Value")
+            .AddRow("[grey]Position[/]", $"[white]X {session.CurrentPosition.X}, Y {session.CurrentPosition.Y}[/]")
+            .AddRow("[grey]Room[/]", FormatRoomType(room.RoomType))
+            .AddRow("[grey]Status[/]", FormatRoomStatus(room))
+            .AddRow("[grey]Steps[/]", $"[yellow]{actor.Steps}[/]")
+            .AddRow("[grey]Explored[/]", $"[green]{exploredRooms}[/]/[grey]{totalRooms}[/]");
+
+        var legend = new Grid();
+        legend.AddColumn();
+        legend.AddColumn();
+        AddLegendRow(legend, "[bold white on green] @ [/]", "You");
+        AddLegendRow(legend, "[bold white on blue] S [/]", "Start");
+        AddLegendRow(legend, "[bold white on purple] E [/]", "Exit");
+        AddLegendRow(legend, "[bold white on red] ! [/]", "Enemy");
+        AddLegendRow(legend, "[bold black on yellow] $ [/]", "Treasure");
+        AddLegendRow(legend, "[white on black] . [/]", "Cleared");
+        AddLegendRow(legend, "[grey on black] ? [/]", "Scouted");
+
+        var panelGrid = new Grid();
+        panelGrid.AddColumn();
+        panelGrid.AddRow(new IRenderable[] { status });
+        panelGrid.AddEmptyRow();
+        panelGrid.AddRow(new IRenderable[] { new Markup("[bold]Legend[/]") });
+        panelGrid.AddRow(new IRenderable[] { legend });
+
+        return new Panel(panelGrid)
+            .Header("Status")
+            .BorderColor(GetRoomBorderColor(room));
+    }
+
+    private static void AddLegendRow(Grid legend, string sample, string label)
+    {
+        legend.AddRow(sample, $"[grey]{label}[/]");
+    }
+
+    private static string FormatMapCell(WorldSession session, MinimapCell cell)
+    {
+        if (!cell.IsVisible)
+        {
+            return "[black on black]   [/]";
+        }
+
+        if (cell.Symbol == '@')
+        {
+            return "[bold white on green] @ [/]";
+        }
+
+        var room = session.Map.GetRoom(cell.Position);
+
+        return cell.Symbol switch
+        {
+            'S' => "[bold white on blue] S [/]",
+            'E' => "[bold white on purple] E [/]",
+            '!' => "[bold white on red] ! [/]",
+            '$' => "[bold black on yellow] $ [/]",
+            '?' => "[grey on black] ? [/]",
+            _ => room.RoomType switch
+            {
+                RoomType.Start => "[white on blue] S [/]",
+                RoomType.Exit => "[white on purple] E [/]",
+                RoomType.Enemy => "[white on black] . [/]",
+                RoomType.Treasure => "[white on black] . [/]",
+                _ => "[white on black] . [/]"
+            }
+        };
+    }
+
+    private static string FormatRoomType(RoomType roomType)
+    {
+        return roomType switch
+        {
+            RoomType.Start => "[blue]Start[/]",
+            RoomType.Exit => "[purple]Exit[/]",
+            RoomType.Enemy => "[red]Enemy[/]",
+            RoomType.Treasure => "[yellow]Treasure[/]",
+            _ => "[white]Empty[/]"
+        };
+    }
+
+    private static string FormatRoomStatus(WorldRoom room)
     {
         return room.RoomType switch
         {
-            RoomType.Enemy => room.IsCleared ? "Cleared" : "Hostile",
-            RoomType.Treasure => room.IsLooted ? "Looted" : "Unlooted",
-            _ => room.IsVisited ? "Visited" : "Unvisited"
+            RoomType.Enemy => room.IsCleared ? "[green]Cleared[/]" : "[red]Hostile[/]",
+            RoomType.Treasure => room.IsLooted ? "[green]Looted[/]" : "[yellow]Unlooted[/]",
+            RoomType.Exit => "[purple]Exit[/]",
+            RoomType.Start => "[blue]Safe[/]",
+            _ => room.IsVisited ? "[green]Visited[/]" : "[grey]Unvisited[/]"
         };
     }
+
+    private static Color GetRoomBorderColor(WorldRoom room)
+    {
+        return room.RoomType switch
+        {
+            RoomType.Enemy when !room.IsCleared => Color.Red,
+            RoomType.Treasure when !room.IsLooted => Color.Yellow,
+            RoomType.Exit => Color.Purple,
+            RoomType.Start => Color.Blue,
+            _ => Color.Grey
+        };
+    }
+
 }
