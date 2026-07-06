@@ -43,7 +43,7 @@ public sealed class WorldExplorationService : IExplorationService
             RoomType.Enemy when !room.IsCleared => new ExplorationResult(
                 ExplorationState.EnemyEncounter,
                 room,
-                _encounterGenerator.Generate(seed: DeriveRoomSeed(session.Map.Seed, room.Position)),
+                _encounterGenerator.Generate(seed: room.EncounterSeed ?? WorldGenerator.DeriveRoomSeed(session.Map.Seed, room.Position)),
                 LootReward.Empty,
                 "An enemy group blocks the room."),
             RoomType.Treasure when !room.IsLooted => new ExplorationResult(
@@ -79,16 +79,4 @@ public sealed class WorldExplorationService : IExplorationService
             "You found the exit and completed this world.");
     }
 
-    private static int DeriveRoomSeed(int worldSeed, WorldPosition position)
-    {
-        unchecked
-        {
-            var hash = 17;
-            hash = hash * 31 + worldSeed;
-            hash = hash * 31 + position.X;
-            hash = hash * 31 + position.Y;
-            hash = hash * 31 + 1543;
-            return hash;
-        }
-    }
 }

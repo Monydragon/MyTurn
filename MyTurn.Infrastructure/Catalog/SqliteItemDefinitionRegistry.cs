@@ -1,18 +1,16 @@
 using System.Diagnostics.CodeAnalysis;
+using MyTurn.Application;
 using MyTurn.Domain;
 
-namespace MyTurn.Application;
+namespace MyTurn.Infrastructure.Catalog;
 
-public sealed class DefaultItemDefinitionRegistry : IItemDefinitionRegistry
+internal sealed class SqliteItemDefinitionRegistry : IItemDefinitionRegistry
 {
     private readonly Dictionary<string, IItemDefinition> _definitions;
 
-    public DefaultItemDefinitionRegistry(IWeaponDefinitionRegistry weaponDefinitions)
+    public SqliteItemDefinitionRegistry(IEnumerable<IItemDefinition> definitions)
     {
-        _definitions = weaponDefinitions.Definitions
-            .Cast<IItemDefinition>()
-            .Concat(DefaultCatalogData.Items)
-            .ToDictionary(definition => definition.Id);
+        _definitions = definitions.ToDictionary(definition => definition.Id);
     }
 
     public IReadOnlyCollection<IItemDefinition> Definitions => _definitions.Values.ToArray();

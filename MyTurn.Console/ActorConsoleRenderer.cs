@@ -34,6 +34,12 @@ internal static class ActorConsoleRenderer
             $"[green]Character created![/] Name: [yellow]{actor.Name}[/], Age: [yellow]{actor.Age}[/], Gender: [yellow]{actor.Gender.GetDisplayName()}[/], Species: [yellow]{actor.Species.GetDisplayName()}[/], Character Class: [yellow]{actor.CharacterClass.GetDisplayName()}[/]");
     }
 
+    public static void ShowLoaded(Actor actor)
+    {
+        AnsiConsole.MarkupLineInterpolated(
+            $"[green]Save loaded![/] Name: [yellow]{actor.Name}[/], Class: [yellow]{actor.CharacterClass.GetDisplayName()}[/], Steps: [yellow]{actor.Steps}[/]");
+    }
+
     public static void ShowCharacter(Actor actor)
     {
         AnsiConsole.Write(new Rule("[bold yellow]Character[/]").RuleStyle("grey"));

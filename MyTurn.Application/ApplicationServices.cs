@@ -22,8 +22,9 @@ public sealed class ApplicationServices
     public IWorldSessionService WorldSessionService { get; }
     public ISkillDefinitionRegistry SkillDefinitions { get; }
     public IStatDefinitionRegistry StatDefinitions { get; }
+    public IGamePersistenceService? GamePersistence { get; }
 
-    private ApplicationServices(
+    public ApplicationServices(
         IActorFactory actorFactory,
         ICharacterCreationValidator characterCreationValidator,
         ICombatService combatService,
@@ -43,7 +44,8 @@ public sealed class ApplicationServices
         IWorldGenerator worldGenerator,
         IWorldSessionService worldSessionService,
         ISkillDefinitionRegistry skillDefinitions,
-        IStatDefinitionRegistry statDefinitions)
+        IStatDefinitionRegistry statDefinitions,
+        IGamePersistenceService? gamePersistence = null)
     {
         ActorFactory = actorFactory;
         CharacterCreationValidator = characterCreationValidator;
@@ -65,6 +67,7 @@ public sealed class ApplicationServices
         WorldSessionService = worldSessionService;
         SkillDefinitions = skillDefinitions;
         StatDefinitions = statDefinitions;
+        GamePersistence = gamePersistence;
     }
 
     public static ApplicationServices CreateDefault()

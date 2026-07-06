@@ -40,4 +40,12 @@ public sealed class WorldSessionService : IWorldSessionService
 
         return session;
     }
+
+    public void SetActiveSession(Actor actor, WorldSession session)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentNullException.ThrowIfNull(session);
+
+        _sessions[actor.Id] = session;
+    }
 }

@@ -2,7 +2,7 @@ namespace MyTurn.Domain;
 
 public sealed class Actor : IActor
 {
-    public Guid Id { get; } = Guid.NewGuid();
+    public Guid Id { get; }
     public string Name { get; set; }
     public SkillSet Skills { get; }
     public StatSet Stats { get; }
@@ -23,8 +23,10 @@ public sealed class Actor : IActor
         SkillSet skills,
         StatSet stats,
         EquipmentLoadout equipment,
-        Inventory inventory)
+        Inventory inventory,
+        Guid? id = null)
     {
+        Id = id ?? Guid.NewGuid();
         Name = name;
         Age = age;
         Gender = gender;

@@ -7,6 +7,7 @@ public sealed class GameFlowService : IGameFlowService
         return action switch
         {
             MainMenuAction.NewGame => GameFlowState.CharacterCreation,
+            MainMenuAction.LoadGame => GameFlowState.LoadGame,
             MainMenuAction.Exit => GameFlowState.Exit,
             _ => throw new ArgumentOutOfRangeException(nameof(action), action, "Unsupported main menu action.")
         };

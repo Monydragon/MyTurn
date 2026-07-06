@@ -17,6 +17,7 @@
     <ItemGroup>
         <ProjectReference Include="..\MyTurn.Application\MyTurn.Application.csproj" />
         <ProjectReference Include="..\MyTurn.Domain\MyTurn.Domain.csproj" />
+        <ProjectReference Include="..\MyTurn.Infrastructure\MyTurn.Infrastructure.csproj" />
     </ItemGroup>
 
 </Project>

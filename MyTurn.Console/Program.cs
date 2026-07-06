@@ -1,5 +1,6 @@
 using MyTurn.Application;
 using MyTurn.Domain;
+using MyTurn.Infrastructure;
 using Spectre.Console;
 
 namespace MyTurn.Console;
@@ -8,21 +9,36 @@ internal static class Program
 {
     private static void Main()
     {
-        var services = ApplicationServices.CreateDefault();
+        var services = SqliteApplicationServices.CreateDefault();
         var state = GameFlowState.MainMenu;
-        Actor? actor = null;
+        GameSession? gameSession = null;
 
         while (state != GameFlowState.Exit)
         {
-            state = state switch
+            switch (state)
             {
-                GameFlowState.MainMenu => RunMainMenu(services),
-                GameFlowState.CharacterCreation => RunCharacterCreation(services, out actor),
-                GameFlowState.CharacterHub => actor is null
-                    ? GameFlowState.MainMenu
-                    : RunCharacterHub(services, actor),
-                _ => GameFlowState.Exit
-            };
+                case GameFlowState.MainMenu:
+                    state = RunMainMenu(services);
+                    break;
+
+                case GameFlowState.CharacterCreation:
+                    state = RunCharacterCreation(services, out gameSession);
+                    break;
+
+                case GameFlowState.LoadGame:
+                    state = RunLoadGame(services, out gameSession);
+                    break;
+
+                case GameFlowState.CharacterHub:
+                    state = gameSession is null
+                        ? GameFlowState.MainMenu
+                        : RunCharacterHub(services, ref gameSession);
+                    break;
+
+                default:
+                    state = GameFlowState.Exit;
+                    break;
+            }
         }
 
         ActorConsoleRenderer.ShowExit();
@@ -36,7 +52,7 @@ internal static class Program
         return services.GameFlowService.GetNextState(action);
     }
 
-    private static GameFlowState RunCharacterCreation(ApplicationServices services, out Actor actor)
+    private static GameFlowState RunCharacterCreation(ApplicationServices services, out GameSession gameSession)
     {
         while (true)
         {
@@ -49,15 +65,41 @@ internal static class Program
                 continue;
             }
 
-            actor = services.ActorFactory.Create(request);
+            var actor = services.ActorFactory.Create(request);
+            gameSession = services.GamePersistence!.CreateSave(actor);
             ActorConsoleRenderer.ShowCreated(actor);
 
             return services.GameFlowService.GetStateAfterCharacterCreation();
         }
     }
 
-    private static GameFlowState RunCharacterHub(ApplicationServices services, Actor actor)
+    private static GameFlowState RunLoadGame(ApplicationServices services, out GameSession? gameSession)
     {
+        var saves = services.GamePersistence!.ListSaves();
+
+        if (saves.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]No saves found.[/]");
+            gameSession = null;
+            return GameFlowState.MainMenu;
+        }
+
+        var selectedSave = ConsolePrompts.PromptForSaveSlot(saves);
+        gameSession = services.GamePersistence.LoadSave(selectedSave.Id);
+
+        if (gameSession.ActiveWorldSession is not null)
+        {
+            services.WorldSessionService.SetActiveSession(gameSession.Actor, gameSession.ActiveWorldSession);
+        }
+
+        ActorConsoleRenderer.ShowLoaded(gameSession.Actor);
+
+        return GameFlowState.CharacterHub;
+    }
+
+    private static GameFlowState RunCharacterHub(ApplicationServices services, ref GameSession gameSession)
+    {
+        var actor = gameSession.Actor;
         var action = ConsolePrompts.PromptForCharacterHubAction();
 
         switch (action)
@@ -67,11 +109,12 @@ internal static class Program
                 break;
 
             case CharacterHubAction.ExploreWorld:
-                RunExploreWorld(services, actor);
+                RunExploreWorld(services, ref gameSession);
                 break;
 
             case CharacterHubAction.FightEncounter:
                 RunCombat(services, actor);
+                services.GamePersistence!.Save(gameSession);
                 break;
 
             case CharacterHubAction.ViewInventory:
@@ -96,6 +139,7 @@ internal static class Program
 
             case CharacterHubAction.EquipGear:
                 EquipGearFromInventory(services, actor);
+                services.GamePersistence!.Save(gameSession);
                 break;
         }
 
@@ -141,12 +185,15 @@ internal static class Program
         return outcome;
     }
 
-    private static void RunExploreWorld(ApplicationServices services, Actor actor)
+    private static void RunExploreWorld(ApplicationServices services, ref GameSession gameSession)
     {
+        var actor = gameSession.Actor;
         var seed = services.WorldSessionService.HasActiveSession(actor)
             ? null
             : ConsolePrompts.PromptForWorldSeed();
         var session = services.WorldSessionService.GetOrCreate(actor, seed);
+        gameSession = gameSession with { ActiveWorldSession = session };
+        services.GamePersistence!.Save(gameSession);
         var keepExploring = true;
 
         while (keepExploring && !session.IsCompleted)
@@ -166,6 +213,7 @@ internal static class Program
 
             var result = services.ExplorationService.TryMove(actor, session, direction);
             ActorConsoleRenderer.ShowWorldMessage(result);
+            services.GamePersistence!.Save(gameSession);
 
             switch (result.State)
             {
@@ -175,9 +223,11 @@ internal static class Program
                     if (outcome.OutcomeType == BattleOutcomeType.Victory)
                     {
                         services.ExplorationService.ClearEnemyRoom(session);
+                        services.GamePersistence.Save(gameSession);
                     }
                     else
                     {
+                        services.GamePersistence.Save(gameSession);
                         keepExploring = false;
                     }
 
@@ -185,6 +235,7 @@ internal static class Program
 
                 case ExplorationState.ExitReached:
                     ActorConsoleRenderer.ShowWorldCompleted(session);
+                    services.GamePersistence.Save(gameSession);
                     keepExploring = false;
                     break;
             }

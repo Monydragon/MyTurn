@@ -59,6 +59,22 @@ internal static class ConsolePrompts
             new ConfirmationPrompt("Start the game with this character?"));
     }
 
+    public static SaveSlotSummary PromptForSaveSlot(IEnumerable<SaveSlotSummary> saves)
+    {
+        var options = saves
+            .Select(save => new MenuOption<SaveSlotSummary>(
+                $"{save.Name} - {save.LastPlayedAtUtc.ToLocalTime():g}",
+                save))
+            .ToArray();
+
+        return AnsiConsole.Prompt(
+            new SelectionPrompt<MenuOption<SaveSlotSummary>>()
+                .Title("Load Game")
+                .UseConverter(option => option.Label)
+                .AddChoices(options))
+            .Value;
+    }
+
     public static CharacterHubAction PromptForCharacterHubAction()
     {
         return AnsiConsole.Prompt(

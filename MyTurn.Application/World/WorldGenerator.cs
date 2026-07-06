@@ -32,7 +32,11 @@ public sealed class WorldGenerator : IWorldGenerator
                         ? RoomType.Exit
                         : ChooseRoomType(random);
 
-                rooms.Add(new WorldRoom(position, roomType));
+                var encounterSeed = roomType == RoomType.Enemy
+                    ? DeriveRoomSeed(seed, position)
+                    : (int?)null;
+
+                rooms.Add(new WorldRoom(position, roomType, encounterSeed));
             }
         }
 
@@ -62,5 +66,18 @@ public sealed class WorldGenerator : IWorldGenerator
             <= 90 => RoomType.Enemy,
             _ => RoomType.Treasure
         };
+    }
+
+    internal static int DeriveRoomSeed(int worldSeed, WorldPosition position)
+    {
+        unchecked
+        {
+            var hash = 17;
+            hash = hash * 31 + worldSeed;
+            hash = hash * 31 + position.X;
+            hash = hash * 31 + position.Y;
+            hash = hash * 31 + 1543;
+            return hash;
+        }
     }
 }
