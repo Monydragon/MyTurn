@@ -5,6 +5,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <ItemGroup>
@@ -13,7 +14,12 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Include="Sayers.SDL2.Core" Version="1.0.11" />
         <PackageReference Include="Spectre.Console" Version="0.57.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="Input\gamecontrollerdb.txt" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
 </Project>

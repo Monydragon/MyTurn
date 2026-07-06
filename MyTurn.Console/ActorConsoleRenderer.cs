@@ -1,4 +1,5 @@
 using MyTurn.Application;
+using MyTurn.Console.Input;
 using MyTurn.Domain;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -52,6 +53,24 @@ internal static class ActorConsoleRenderer
     {
         AnsiConsole.MarkupLineInterpolated(
             $"[green]Save loaded![/] Leader: [yellow]{party.Leader.Name}[/], Active Members: [yellow]{party.ActiveMembers.Count}[/], Steps: [yellow]{party.Steps}[/]");
+    }
+
+    public static void ShowHub(Party party, IReadOnlyList<string> options, int selectedIndex, InputSnapshot snapshot)
+    {
+        AnsiConsole.Clear();
+        AnsiConsole.Write(new Rule("[bold yellow]Camp[/]").RuleStyle("grey"));
+
+        var layout = new Grid();
+        layout.AddColumn();
+        layout.AddColumn();
+        layout.AddRow(new IRenderable[]
+        {
+            BuildPartySummaryPanel(party),
+            BuildHubMenuPanel(options, selectedIndex)
+        });
+
+        AnsiConsole.Write(layout);
+        ConsoleMenu.RenderFooter("[grey]Move:[/] D-pad/left stick or WASD/arrows  [grey]Select:[/] A/Enter  [grey]Back:[/] B/Esc", snapshot);
     }
 
     public static void ShowParty(Party party)
@@ -232,7 +251,13 @@ internal static class ActorConsoleRenderer
         AnsiConsole.Write(table);
     }
 
-    public static void ShowBattleScreen(CombatState state, Combatant? actingCombatant, IReadOnlyList<string> battleLog)
+    public static void ShowBattleScreen(
+        CombatState state,
+        Combatant? actingCombatant,
+        IReadOnlyList<string> battleLog,
+        IReadOnlyList<string>? commandOptions = null,
+        int selectedCommandIndex = -1,
+        InputSnapshot? snapshot = null)
     {
         AnsiConsole.Clear();
         AnsiConsole.Write(new Rule($"[bold red]Battle Seed {state.Seed}[/]").RuleStyle("grey"));
@@ -257,6 +282,16 @@ internal static class ActorConsoleRenderer
 
         AnsiConsole.Write(topGrid);
         AnsiConsole.Write(bottomGrid);
+
+        if (commandOptions is not null)
+        {
+            AnsiConsole.Write(BuildCommandMenuPanel(commandOptions, selectedCommandIndex));
+        }
+
+        if (snapshot is not null)
+        {
+            ConsoleMenu.RenderFooter("[grey]Navigate:[/] D-pad/left stick or WASD/arrows  [grey]Select:[/] A/Enter  [grey]Back:[/] B/Esc", snapshot);
+        }
     }
 
     public static void ShowCombatants(CombatState state)
@@ -350,7 +385,12 @@ internal static class ActorConsoleRenderer
         AnsiConsole.MarkupLine("[grey]Move with [bold]WASD[/] or arrow keys. Press [bold]Q[/] or [bold]Escape[/] to return to the hub.[/]");
     }
 
-    public static void ShowWorld(Party party, WorldSession session, MinimapSnapshot minimap, ExplorationResult? result = null)
+    public static void ShowWorld(
+        Party party,
+        WorldSession session,
+        MinimapSnapshot minimap,
+        ExplorationResult? result = null,
+        InputSnapshot? snapshot = null)
     {
         AnsiConsole.Clear();
         AnsiConsole.Write(new Rule($"[bold green]World Seed {session.Map.Seed}[/]").RuleStyle("grey"));
@@ -365,7 +405,7 @@ internal static class ActorConsoleRenderer
         });
 
         AnsiConsole.Write(worldView);
-        AnsiConsole.MarkupLine("[grey]Move with [bold]WASD[/] or arrow keys. Press [bold]Q[/] or [bold]Escape[/] to return to the hub.[/]");
+        ConsoleMenu.RenderFooter("[grey]Move:[/] D-pad/left stick or WASD/arrows  [grey]Hub:[/] B/Start/Esc", snapshot ?? InputSnapshot.Empty);
     }
 
     public static void ShowWorldMessage(ExplorationResult result)
@@ -419,6 +459,52 @@ internal static class ActorConsoleRenderer
             .AddRow("Class", characterClass)
             .AddRow("Steps", steps)
             .AddRow("Equipped Weapon", equippedWeapon);
+    }
+
+    private static Panel BuildPartySummaryPanel(Party party)
+    {
+        var table = new Table()
+            .NoBorder()
+            .AddColumn("Name")
+            .AddColumn("Class")
+            .AddColumn(new TableColumn("HP").RightAligned());
+
+        foreach (var member in party.ActiveMembers)
+        {
+            table.AddRow(
+                Markup.Escape(member.Name),
+                member.CharacterClass.GetDisplayName(),
+                $"{member.Stats[StatType.Health].CurrentValue}/{member.Stats[StatType.Health].MaxValue}");
+        }
+
+        table.AddEmptyRow();
+        table.AddRow("[grey]Currency[/]", string.Empty, party.Inventory.Currency.ToString());
+        table.AddRow("[grey]Steps[/]", string.Empty, party.Steps.ToString());
+
+        return new Panel(table)
+            .Header("Party")
+            .BorderColor(Color.Green);
+    }
+
+    private static Panel BuildHubMenuPanel(IReadOnlyList<string> options, int selectedIndex)
+    {
+        var table = new Table()
+            .NoBorder()
+            .AddColumn(" ")
+            .AddColumn("Action");
+
+        for (var i = 0; i < options.Count; i++)
+        {
+            var marker = i == selectedIndex ? "[bold yellow]>[/]" : " ";
+            var label = i == selectedIndex
+                ? $"[bold yellow]{Markup.Escape(options[i])}[/]"
+                : Markup.Escape(options[i]);
+            table.AddRow(marker, label);
+        }
+
+        return new Panel(table)
+            .Header("Actions")
+            .BorderColor(Color.Blue);
     }
 
     private static Panel BuildEnemyBattlePanel(CombatState state, Combatant? actingCombatant)
@@ -495,6 +581,32 @@ internal static class ActorConsoleRenderer
         return new Panel(details)
             .Header("Command")
             .BorderColor(Color.Blue);
+    }
+
+    private static Panel BuildCommandMenuPanel(IReadOnlyList<string> options, int selectedIndex)
+    {
+        var grid = new Grid();
+        grid.AddColumn();
+        grid.AddColumn();
+
+        for (var i = 0; i < options.Count; i += 2)
+        {
+            var left = FormatCommandOption(options[i], i == selectedIndex);
+            var right = i + 1 < options.Count
+                ? FormatCommandOption(options[i + 1], i + 1 == selectedIndex)
+                : string.Empty;
+            grid.AddRow(left, right);
+        }
+
+        return new Panel(grid)
+            .Header("Actions")
+            .BorderColor(Color.Blue);
+    }
+
+    private static string FormatCommandOption(string label, bool isSelected)
+    {
+        var escaped = Markup.Escape(label);
+        return isSelected ? $"[bold yellow]> {escaped}[/]" : $"  {escaped}";
     }
 
     private static string FormatCombatantName(Combatant combatant, Combatant? actingCombatant)

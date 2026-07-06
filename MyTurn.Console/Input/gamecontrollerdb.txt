@@ -1,0 +1,3 @@
+# MyTurn controller mappings.
+# SDL ships common GameController mappings; this file is loaded at startup so
+# additional mappings can be dropped in without code changes.
