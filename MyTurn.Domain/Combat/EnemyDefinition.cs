@@ -7,4 +7,5 @@ public sealed record EnemyDefinition(
     IWeapon Weapon,
     int ExperienceReward,
     IReadOnlyCollection<WeightedEnemyAction> Actions,
-    IReadOnlyCollection<LootDropDefinition> LootTable);
+    IReadOnlyCollection<LootDropDefinition> LootTable,
+    int ThreatRating = 1);

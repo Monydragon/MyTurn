@@ -16,6 +16,14 @@ public sealed class WorldExplorationService : IExplorationService
     public ExplorationResult TryMove(Actor actor, WorldSession session, Direction direction)
     {
         ArgumentNullException.ThrowIfNull(actor);
+        var party = new Party([actor], inventory: actor.Inventory, steps: actor.Steps);
+
+        return TryMove(party, session, direction);
+    }
+
+    public ExplorationResult TryMove(Party party, WorldSession session, Direction direction)
+    {
+        ArgumentNullException.ThrowIfNull(party);
         ArgumentNullException.ThrowIfNull(session);
 
         var nextPosition = session.CurrentPosition.Move(direction);
@@ -26,14 +34,21 @@ public sealed class WorldExplorationService : IExplorationService
         }
 
         session.MoveTo(nextPosition);
-        actor.AddSteps(1);
+        party.AddSteps(1);
 
-        return EnterCurrentRoom(actor, session);
+        return EnterCurrentRoom(party, session);
     }
 
     public ExplorationResult EnterCurrentRoom(Actor actor, WorldSession session)
     {
         ArgumentNullException.ThrowIfNull(actor);
+
+        return EnterCurrentRoom(new Party([actor], inventory: actor.Inventory, steps: actor.Steps), session);
+    }
+
+    public ExplorationResult EnterCurrentRoom(Party party, WorldSession session)
+    {
+        ArgumentNullException.ThrowIfNull(party);
         ArgumentNullException.ThrowIfNull(session);
 
         var room = session.CurrentRoom;
@@ -50,7 +65,7 @@ public sealed class WorldExplorationService : IExplorationService
                 ExplorationState.TreasureFound,
                 room,
                 null,
-                _treasureLootService.ClaimTreasure(actor, session, room),
+                _treasureLootService.ClaimTreasure(party, session, room),
                 "You found treasure."),
             RoomType.Exit => CompleteExit(session, room),
             _ => new ExplorationResult(ExplorationState.Moved, room, null, LootReward.Empty, "You enter the room.")

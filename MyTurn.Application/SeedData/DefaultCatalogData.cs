@@ -39,7 +39,8 @@ public static class DefaultCatalogData
                 new WeaponDefinition("rat-bite", "Rat Bite", WeaponType.Melee, 1, 4, []),
                 20,
                 [new WeightedEnemyAction(EnemyActionType.BasicAttack, 90), new WeightedEnemyAction(EnemyActionType.Defend, 10)],
-                [new LootDropDefinition(LootDropKind.Currency, "currency", 4, 9, 70), new LootDropDefinition(LootDropKind.Item, "torn-cloth", 1, 2, 30)]),
+                [new LootDropDefinition(LootDropKind.Currency, "currency", 4, 9, 70), new LootDropDefinition(LootDropKind.Item, "torn-cloth", 1, 2, 30)],
+                1),
             45),
         new(
             new EnemyDefinition(
@@ -59,7 +60,8 @@ public static class DefaultCatalogData
                 new WeaponDefinition("rusty-dagger", "Rusty Dagger", WeaponType.Melee, 2, 5, []),
                 35,
                 [new WeightedEnemyAction(EnemyActionType.BasicAttack, 80), new WeightedEnemyAction(EnemyActionType.Defend, 20)],
-                [new LootDropDefinition(LootDropKind.Currency, "currency", 8, 15, 55), new LootDropDefinition(LootDropKind.Item, "goblin-ear", 1, 1, 25), new LootDropDefinition(LootDropKind.Item, "small-healing-potion", 1, 1, 20)]),
+                [new LootDropDefinition(LootDropKind.Currency, "currency", 8, 15, 55), new LootDropDefinition(LootDropKind.Item, "goblin-ear", 1, 1, 25), new LootDropDefinition(LootDropKind.Item, "small-healing-potion", 1, 1, 20)],
+                2),
             35),
         new(
             new EnemyDefinition(
@@ -79,7 +81,8 @@ public static class DefaultCatalogData
                 new WeaponDefinition("chipped-sword", "Chipped Sword", WeaponType.Melee, 3, 6, []),
                 50,
                 [new WeightedEnemyAction(EnemyActionType.BasicAttack, 75), new WeightedEnemyAction(EnemyActionType.Defend, 25)],
-                [new LootDropDefinition(LootDropKind.Currency, "currency", 12, 24, 60), new LootDropDefinition(LootDropKind.Item, "small-healing-potion", 1, 1, 20), new LootDropDefinition(LootDropKind.Item, "scout-boots", 1, 1, 20)]),
+                [new LootDropDefinition(LootDropKind.Currency, "currency", 12, 24, 60), new LootDropDefinition(LootDropKind.Item, "small-healing-potion", 1, 1, 20), new LootDropDefinition(LootDropKind.Item, "scout-boots", 1, 1, 20)],
+                3),
             20)
     ];
 }

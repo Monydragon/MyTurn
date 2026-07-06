@@ -10,6 +10,12 @@ public enum CharacterHubAction
     [DisplayName("Fight Encounter")]
     FightEncounter,
 
+    [DisplayName("View Party")]
+    ViewParty,
+
+    [DisplayName("Manage Party")]
+    ManageParty,
+
     [DisplayName("View Character")]
     ViewCharacter,
 

@@ -15,18 +15,50 @@ public sealed class EncounterGenerator : IEncounterGenerator
     {
         var encounterSeed = seed ?? Environment.TickCount;
         var random = new SeededRandomSource(encounterSeed);
-        var enemyCount = Math.Clamp(difficulty + random.NextInclusive(0, 2), 1, 4);
-        var enemies = Enumerable.Range(0, enemyCount)
-            .Select(_ => ChooseEnemy(random))
-            .ToArray();
+        var difficultyBudget = Math.Max(1, difficulty * 2 + random.NextInclusive(0, 2));
+        var enemies = ChooseEnemies(random, difficultyBudget);
 
-        return new Encounter(encounterSeed, enemies);
+        return new Encounter(encounterSeed, enemies, difficultyBudget);
     }
 
-    private EnemyDefinition ChooseEnemy(IRandomSource random)
+    private IReadOnlyList<EnemyDefinition> ChooseEnemies(IRandomSource random, int difficultyBudget)
     {
-        var definitions = _enemies.Definitions.ToArray();
+        var enemies = new List<EnemyDefinition>();
+        var remainingBudget = difficultyBudget;
+
+        while (enemies.Count < 4 && remainingBudget > 0)
+        {
+            var enemy = ChooseEnemy(random, remainingBudget);
+            enemies.Add(enemy);
+            remainingBudget -= Math.Max(1, enemy.ThreatRating);
+
+            if (enemies.Count > 0 && random.NextInclusive(1, 100) > 65)
+            {
+                break;
+            }
+        }
+
+        return enemies.Count == 0 ? [ChooseEnemy(random, difficultyBudget)] : enemies;
+    }
+
+    private EnemyDefinition ChooseEnemy(IRandomSource random, int remainingBudget)
+    {
+        var definitions = _enemies.Definitions
+            .Where(definition => definition.Enemy.ThreatRating <= Math.Max(1, remainingBudget))
+            .ToArray();
+
+        if (definitions.Length == 0)
+        {
+            definitions = _enemies.Definitions.ToArray();
+        }
+
         var totalWeight = definitions.Sum(definition => Math.Max(0, definition.Weight));
+
+        if (totalWeight <= 0)
+        {
+            return definitions[0].Enemy;
+        }
+
         var roll = random.NextInclusive(1, totalWeight);
         var current = 0;
 

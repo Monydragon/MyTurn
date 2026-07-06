@@ -36,21 +36,32 @@ public sealed class SqliteGamePersistenceService : IGamePersistenceService
     {
         ArgumentNullException.ThrowIfNull(actor);
 
+        return CreateSave(new Party([actor], inventory: actor.Inventory, steps: actor.Steps));
+    }
+
+    public GameSession CreateSave(Party party)
+    {
+        ArgumentNullException.ThrowIfNull(party);
+
         using var db = CreateContext();
         var now = DateTime.UtcNow;
         var saveSlot = new Data.Entities.SaveSlotEntity
         {
             Id = Guid.NewGuid(),
-            Name = actor.Name,
+            Name = party.Leader.Name,
             CreatedAtUtc = now,
-            LastPlayedAtUtc = now
+            LastPlayedAtUtc = now,
+            Steps = party.Steps,
+            Currency = party.Inventory.Currency
         };
-        saveSlot.Player = _mapper.CreatePlayerEntity(saveSlot.Id, actor);
+
+        saveSlot.PartyMembers.AddRange(_mapper.CreatePartyMemberEntities(saveSlot.Id, party));
+        saveSlot.InventoryStacks.AddRange(_mapper.CreateInventoryStackEntities(saveSlot.Id, party.Inventory));
 
         db.SaveSlots.Add(saveSlot);
         db.SaveChanges();
 
-        return new GameSession(saveSlot.Id, actor, null);
+        return new GameSession(saveSlot.Id, party, null);
     }
 
     public GameSession LoadSave(Guid saveSlotId)
@@ -59,12 +70,12 @@ public sealed class SqliteGamePersistenceService : IGamePersistenceService
         var saveSlot = LoadFullSaveSlot(db, saveSlotId)
             ?? throw new KeyNotFoundException($"Save slot '{saveSlotId}' was not found.");
 
-        if (saveSlot.Player is null)
+        if (saveSlot.PartyMembers.Count == 0)
         {
-            throw new InvalidOperationException($"Save slot '{saveSlotId}' has no player record.");
+            throw new InvalidOperationException($"Save slot '{saveSlotId}' has no party members.");
         }
 
-        var actor = _mapper.ToActor(saveSlot.Player);
+        var party = _mapper.ToParty(saveSlot);
         var activeWorld = saveSlot.WorldSessions
             .Where(session => !session.IsCompleted)
             .OrderByDescending(session => session.UpdatedAtUtc)
@@ -72,7 +83,7 @@ public sealed class SqliteGamePersistenceService : IGamePersistenceService
 
         return new GameSession(
             saveSlot.Id,
-            actor,
+            party,
             activeWorld is null ? null : _mapper.ToWorldSession(activeWorld));
     }
 
@@ -85,38 +96,14 @@ public sealed class SqliteGamePersistenceService : IGamePersistenceService
             ?? throw new KeyNotFoundException($"Save slot '{session.SaveSlotId}' was not found.");
         var now = DateTime.UtcNow;
 
-        saveSlot.Name = session.Actor.Name;
+        saveSlot.Name = session.Party.Leader.Name;
         saveSlot.LastPlayedAtUtc = now;
+        saveSlot.Steps = session.Party.Steps;
+        saveSlot.Currency = session.Party.Inventory.Currency;
 
-        if (saveSlot.Player is null)
-        {
-            saveSlot.Player = _mapper.CreatePlayerEntity(saveSlot.Id, session.Actor);
-        }
-        else
-        {
-            db.PlayerStats.RemoveRange(saveSlot.Player.Stats);
-            db.PlayerSkills.RemoveRange(saveSlot.Player.Skills);
-            db.PlayerInventoryStacks.RemoveRange(saveSlot.Player.InventoryStacks);
-            db.PlayerEquipment.RemoveRange(saveSlot.Player.Equipment);
-            _mapper.UpdatePlayerEntity(saveSlot.Player, session.Actor);
-        }
-
-        if (session.ActiveWorldSession is not null)
-        {
-            var worldSession = db.WorldSessions
-                .Include(world => world.Rooms)
-                .SingleOrDefault(world => world.Id == session.ActiveWorldSession.Id);
-
-            if (worldSession is null)
-            {
-                db.WorldSessions.Add(_mapper.CreateWorldSessionEntity(saveSlot.Id, session.ActiveWorldSession));
-            }
-            else
-            {
-                db.WorldRooms.RemoveRange(worldSession.Rooms);
-                _mapper.UpdateWorldSessionEntity(worldSession, session.ActiveWorldSession);
-            }
-        }
+        ReplacePartyInventory(db, saveSlot, session.Party);
+        UpsertPartyMembers(db, saveSlot, session.Party);
+        UpsertWorldSession(db, saveSlot, session.ActiveWorldSession);
 
         db.SaveChanges();
     }
@@ -126,13 +113,82 @@ public sealed class SqliteGamePersistenceService : IGamePersistenceService
         return new MyTurnDbContext(_options);
     }
 
+    private void ReplacePartyInventory(MyTurnDbContext db, Data.Entities.SaveSlotEntity saveSlot, Party party)
+    {
+        db.PartyInventoryStacks.RemoveRange(saveSlot.InventoryStacks);
+        saveSlot.InventoryStacks.Clear();
+        saveSlot.InventoryStacks.AddRange(_mapper.CreateInventoryStackEntities(saveSlot.Id, party.Inventory));
+    }
+
+    private void UpsertPartyMembers(MyTurnDbContext db, Data.Entities.SaveSlotEntity saveSlot, Party party)
+    {
+        var incoming = party.ActiveMembers
+            .Select((actor, index) => (Actor: actor, Location: PartyMemberLocation.Active, ActiveOrder: (int?)index))
+            .Concat(party.ReserveMembers.Select(actor => (Actor: actor, Location: PartyMemberLocation.Reserve, ActiveOrder: (int?)null)))
+            .ToArray();
+        var incomingIds = incoming.Select(member => member.Actor.Id).ToHashSet();
+
+        foreach (var removed in saveSlot.PartyMembers.Where(member => !incomingIds.Contains(member.Id)).ToArray())
+        {
+            db.PartyMembers.Remove(removed);
+        }
+
+        foreach (var member in incoming)
+        {
+            var entity = saveSlot.PartyMembers.SingleOrDefault(existing => existing.Id == member.Actor.Id);
+
+            if (entity is null)
+            {
+                saveSlot.PartyMembers.Add(_mapper.CreatePartyMemberEntity(
+                    saveSlot.Id,
+                    member.Actor,
+                    member.Location,
+                    member.ActiveOrder));
+                continue;
+            }
+
+            db.PartyMemberStats.RemoveRange(entity.Stats);
+            db.PartyMemberSkills.RemoveRange(entity.Skills);
+            db.PartyMemberEquipment.RemoveRange(entity.Equipment);
+            entity.Stats.Clear();
+            entity.Skills.Clear();
+            entity.Equipment.Clear();
+            _mapper.UpdatePartyMemberEntity(entity, member.Actor, member.Location, member.ActiveOrder);
+        }
+    }
+
+    private void UpsertWorldSession(
+        MyTurnDbContext db,
+        Data.Entities.SaveSlotEntity saveSlot,
+        WorldSession? activeWorldSession)
+    {
+        if (activeWorldSession is null)
+        {
+            return;
+        }
+
+        var worldSession = db.WorldSessions
+            .Include(world => world.Rooms)
+            .SingleOrDefault(world => world.Id == activeWorldSession.Id);
+
+        if (worldSession is null)
+        {
+            db.WorldSessions.Add(_mapper.CreateWorldSessionEntity(saveSlot.Id, activeWorldSession));
+        }
+        else
+        {
+            db.WorldRooms.RemoveRange(worldSession.Rooms);
+            _mapper.UpdateWorldSessionEntity(worldSession, activeWorldSession);
+        }
+    }
+
     private static Data.Entities.SaveSlotEntity? LoadFullSaveSlot(MyTurnDbContext db, Guid saveSlotId)
     {
         return db.SaveSlots
-            .Include(slot => slot.Player)!.ThenInclude(player => player!.Stats)
-            .Include(slot => slot.Player)!.ThenInclude(player => player!.Skills)
-            .Include(slot => slot.Player)!.ThenInclude(player => player!.InventoryStacks)
-            .Include(slot => slot.Player)!.ThenInclude(player => player!.Equipment)
+            .Include(slot => slot.InventoryStacks)
+            .Include(slot => slot.PartyMembers).ThenInclude(member => member.Stats)
+            .Include(slot => slot.PartyMembers).ThenInclude(member => member.Skills)
+            .Include(slot => slot.PartyMembers).ThenInclude(member => member.Equipment)
             .Include(slot => slot.WorldSessions).ThenInclude(world => world.Rooms)
             .SingleOrDefault(slot => slot.Id == saveSlotId);
     }

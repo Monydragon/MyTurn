@@ -14,6 +14,21 @@ public sealed class TreasureLootService : ITreasureLootService
     public LootReward ClaimTreasure(Actor actor, WorldSession session, WorldRoom room)
     {
         ArgumentNullException.ThrowIfNull(actor);
+        var reward = ClaimTreasure(actor.Inventory, session, room);
+
+        return reward;
+    }
+
+    public LootReward ClaimTreasure(Party party, WorldSession session, WorldRoom room)
+    {
+        ArgumentNullException.ThrowIfNull(party);
+
+        return ClaimTreasure(party.Inventory, session, room);
+    }
+
+    private LootReward ClaimTreasure(Inventory inventory, WorldSession session, WorldRoom room)
+    {
+        ArgumentNullException.ThrowIfNull(inventory);
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(room);
 
@@ -31,8 +46,8 @@ public sealed class TreasureLootService : ITreasureLootService
         var itemReward = new ItemReward(item, 1);
         var reward = new LootReward(currency, [itemReward]);
 
-        actor.Inventory.AddCurrency(currency);
-        actor.Inventory.Add(item, itemReward.Quantity);
+        inventory.AddCurrency(currency);
+        inventory.Add(item, itemReward.Quantity);
         room.MarkLooted();
 
         return reward;

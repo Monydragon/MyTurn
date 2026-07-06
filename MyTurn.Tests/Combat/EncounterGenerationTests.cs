@@ -15,4 +15,17 @@ public sealed class EncounterGenerationTests
 
         Assert.That(second.Enemies.Select(enemy => enemy.Id), Is.EqualTo(first.Enemies.Select(enemy => enemy.Id)));
     }
+
+    [Test]
+    public void Generate_KeepsEnemyThreatWithinEncounterBudget()
+    {
+        var services = ApplicationServices.CreateDefault();
+
+        var encounters = Enumerable.Range(1, 100)
+            .Select(seed => services.EncounterGenerator.Generate(difficulty: 1, seed))
+            .ToArray();
+
+        Assert.That(encounters, Has.All.Matches<MyTurn.Domain.Encounter>(encounter =>
+            encounter.ThreatRating <= encounter.DifficultyBudget));
+    }
 }

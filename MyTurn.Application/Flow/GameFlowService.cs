@@ -6,6 +6,7 @@ public sealed class GameFlowService : IGameFlowService
     {
         return action switch
         {
+            MainMenuAction.QuickStart => GameFlowState.CharacterHub,
             MainMenuAction.NewGame => GameFlowState.CharacterCreation,
             MainMenuAction.LoadGame => GameFlowState.LoadGame,
             MainMenuAction.Exit => GameFlowState.Exit,
@@ -21,6 +22,8 @@ public sealed class GameFlowService : IGameFlowService
             CharacterHubAction.Exit => GameFlowState.Exit,
             CharacterHubAction.ExploreWorld => GameFlowState.CharacterHub,
             CharacterHubAction.FightEncounter => GameFlowState.CharacterHub,
+            CharacterHubAction.ViewParty => GameFlowState.CharacterHub,
+            CharacterHubAction.ManageParty => GameFlowState.CharacterHub,
             CharacterHubAction.ViewCharacter => GameFlowState.CharacterHub,
             CharacterHubAction.ViewInventory => GameFlowState.CharacterHub,
             CharacterHubAction.ViewStats => GameFlowState.CharacterHub,

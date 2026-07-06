@@ -23,20 +23,38 @@ internal sealed class DomainPersistenceMapper
         _statDefinitions = statDefinitions;
     }
 
-    public PlayerEntity CreatePlayerEntity(Guid saveSlotId, Actor actor)
+    public IReadOnlyList<PartyMemberEntity> CreatePartyMemberEntities(Guid saveSlotId, Party party)
     {
-        var entity = new PlayerEntity
+        ArgumentNullException.ThrowIfNull(party);
+
+        return party.ActiveMembers
+            .Select((member, index) => CreatePartyMemberEntity(saveSlotId, member, PartyMemberLocation.Active, index))
+            .Concat(party.ReserveMembers.Select(member => CreatePartyMemberEntity(saveSlotId, member, PartyMemberLocation.Reserve, null)))
+            .ToArray();
+    }
+
+    public PartyMemberEntity CreatePartyMemberEntity(
+        Guid saveSlotId,
+        Actor actor,
+        PartyMemberLocation location,
+        int? activeOrder)
+    {
+        var entity = new PartyMemberEntity
         {
             Id = actor.Id,
             SaveSlotId = saveSlotId
         };
 
-        UpdatePlayerEntity(entity, actor);
+        UpdatePartyMemberEntity(entity, actor, location, activeOrder);
 
         return entity;
     }
 
-    public void UpdatePlayerEntity(PlayerEntity entity, Actor actor)
+    public void UpdatePartyMemberEntity(
+        PartyMemberEntity entity,
+        Actor actor,
+        PartyMemberLocation location,
+        int? activeOrder)
     {
         entity.Id = actor.Id;
         entity.Name = actor.Name;
@@ -45,21 +63,22 @@ internal sealed class DomainPersistenceMapper
         entity.Species = actor.Species.ToString();
         entity.CharacterClass = actor.CharacterClass.ToString();
         entity.Steps = actor.Steps;
-        entity.Currency = actor.Inventory.Currency;
+        entity.Location = location.ToString();
+        entity.ActiveOrder = activeOrder;
 
         entity.Stats.Clear();
-        entity.Stats.AddRange(actor.Stats.Select(stat => new PlayerStatEntity
+        entity.Stats.AddRange(actor.Stats.Select(stat => new PartyMemberStatEntity
         {
-            PlayerId = actor.Id,
+            PartyMemberId = actor.Id,
             StatType = stat.StatType.ToString(),
             BaseValue = stat.BaseValue,
             MaxValue = stat.MaxValue
         }));
 
         entity.Skills.Clear();
-        entity.Skills.AddRange(actor.Skills.Select(skill => new PlayerSkillEntity
+        entity.Skills.AddRange(actor.Skills.Select(skill => new PartyMemberSkillEntity
         {
-            PlayerId = actor.Id,
+            PartyMemberId = actor.Id,
             SkillType = skill.SkillType.ToString(),
             Name = skill.Leveling.Name,
             CurrentLevel = skill.Leveling.CurrentLevel,
@@ -67,24 +86,57 @@ internal sealed class DomainPersistenceMapper
             MaxLevel = skill.Leveling.MaxLevel
         }));
 
-        entity.InventoryStacks.Clear();
-        entity.InventoryStacks.AddRange(actor.Inventory.Items.Select(stack => new PlayerInventoryStackEntity
-        {
-            PlayerId = actor.Id,
-            ItemId = stack.Item.Id,
-            Quantity = stack.Quantity
-        }));
-
         entity.Equipment.Clear();
-        entity.Equipment.AddRange(actor.Equipment.EquippedItems.Select(item => new PlayerEquipmentEntity
+        entity.Equipment.AddRange(actor.Equipment.EquippedItems.Select(item => new PartyMemberEquipmentEntity
         {
-            PlayerId = actor.Id,
+            PartyMemberId = actor.Id,
             Slot = item.Key.ToString(),
             ItemId = item.Value.Id
         }));
     }
 
-    public Actor ToActor(PlayerEntity entity)
+    public IReadOnlyList<PartyInventoryStackEntity> CreateInventoryStackEntities(Guid saveSlotId, Inventory inventory)
+    {
+        ArgumentNullException.ThrowIfNull(inventory);
+
+        return inventory.Items.Select(stack => new PartyInventoryStackEntity
+        {
+            SaveSlotId = saveSlotId,
+            ItemId = stack.Item.Id,
+            Quantity = stack.Quantity
+        }).ToArray();
+    }
+
+    public Party ToParty(SaveSlotEntity entity)
+    {
+        var inventory = new Inventory();
+
+        if (entity.Currency > 0)
+        {
+            inventory.AddCurrency(entity.Currency);
+        }
+
+        foreach (var stack in entity.InventoryStacks)
+        {
+            inventory.Add(_items.Get(stack.ItemId), stack.Quantity);
+        }
+
+        var activeMembers = entity.PartyMembers
+            .Where(member => ParseLocation(member.Location) == PartyMemberLocation.Active)
+            .OrderBy(member => member.ActiveOrder ?? int.MaxValue)
+            .ThenBy(member => member.Name)
+            .Select(member => ToActor(member, inventory))
+            .ToArray();
+        var reserveMembers = entity.PartyMembers
+            .Where(member => ParseLocation(member.Location) == PartyMemberLocation.Reserve)
+            .OrderBy(member => member.Name)
+            .Select(member => ToActor(member, inventory))
+            .ToArray();
+
+        return new Party(activeMembers, reserveMembers, inventory, entity.Steps, entity.Id);
+    }
+
+    public Actor ToActor(PartyMemberEntity entity, Inventory inventory)
     {
         var characterClass = Enum.Parse<CharacterClass>(entity.CharacterClass);
         var equipmentItems = entity.Equipment
@@ -103,18 +155,6 @@ internal sealed class DomainPersistenceMapper
             {
                 equipmentLoadout.Equip(equipmentItem);
             }
-        }
-
-        var inventory = new Inventory();
-
-        if (entity.Currency > 0)
-        {
-            inventory.AddCurrency(entity.Currency);
-        }
-
-        foreach (var stack in entity.InventoryStacks)
-        {
-            inventory.Add(_items.Get(stack.ItemId), stack.Quantity);
         }
 
         var actor = new Actor(
@@ -201,7 +241,7 @@ internal sealed class DomainPersistenceMapper
             entity.Id);
     }
 
-    private StatSet CreateStatSet(PlayerEntity entity)
+    private StatSet CreateStatSet(PartyMemberEntity entity)
     {
         var persisted = entity.Stats.ToDictionary(stat => Enum.Parse<StatType>(stat.StatType));
         var stats = _statDefinitions.Definitions.Select(definition =>
@@ -217,7 +257,7 @@ internal sealed class DomainPersistenceMapper
         return new StatSet(stats);
     }
 
-    private SkillSet CreateSkillSet(PlayerEntity entity)
+    private SkillSet CreateSkillSet(PartyMemberEntity entity)
     {
         var persisted = entity.Skills.ToDictionary(skill => Enum.Parse<SkillType>(skill.SkillType));
         var skills = _skillDefinitions.Definitions.Select(definition =>
@@ -239,6 +279,13 @@ internal sealed class DomainPersistenceMapper
         });
 
         return new SkillSet(skills);
+    }
+
+    private static PartyMemberLocation ParseLocation(string location)
+    {
+        return Enum.TryParse<PartyMemberLocation>(location, out var parsed)
+            ? parsed
+            : PartyMemberLocation.Reserve;
     }
 
     private static void ApplyEquipmentModifiers(Actor actor)

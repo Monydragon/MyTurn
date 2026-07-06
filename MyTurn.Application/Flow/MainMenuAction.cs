@@ -4,6 +4,9 @@ namespace MyTurn.Application;
 
 public enum MainMenuAction
 {
+    [DisplayName("Quick Start")]
+    QuickStart,
+
     [DisplayName("New Game")]
     NewGame,
 

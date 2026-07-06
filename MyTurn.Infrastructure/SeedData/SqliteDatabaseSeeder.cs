@@ -48,6 +48,8 @@ internal static class SqliteDatabaseSeeder
         existing.Name = incoming.Name;
         existing.Kind = incoming.Kind;
         existing.IsStackable = incoming.IsStackable;
+        existing.Tier = incoming.Tier;
+        existing.SuggestedLevel = incoming.SuggestedLevel;
         existing.WeaponType = incoming.WeaponType;
         existing.MinDamage = incoming.MinDamage;
         existing.MaxDamage = incoming.MaxDamage;
@@ -77,6 +79,7 @@ internal static class SqliteDatabaseSeeder
         existing.Name = incoming.Name;
         existing.WeaponItemId = incoming.WeaponItemId;
         existing.ExperienceReward = incoming.ExperienceReward;
+        existing.ThreatRating = incoming.ThreatRating;
 
         if (existing.SpawnWeight is not null)
         {

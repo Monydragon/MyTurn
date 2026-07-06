@@ -4,8 +4,8 @@ namespace MyTurn.Application;
 
 public interface IWorldSessionService
 {
-    bool HasActiveSession(Actor actor);
-    WorldSession GetOrCreate(Actor actor, int? seed = null);
-    WorldSession CreateNew(Actor actor, int? seed = null);
-    void SetActiveSession(Actor actor, WorldSession session);
+    bool HasActiveSession(Party party);
+    WorldSession GetOrCreate(Party party, int? seed = null);
+    WorldSession CreateNew(Party party, int? seed = null);
+    void SetActiveSession(Party party, WorldSession session);
 }

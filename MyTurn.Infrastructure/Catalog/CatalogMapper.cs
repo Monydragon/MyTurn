@@ -13,7 +13,9 @@ internal static class CatalogMapper
             Id = definition.Id,
             Name = definition.Name,
             Kind = definition.Kind.ToString(),
-            IsStackable = definition.IsStackable
+            IsStackable = definition.IsStackable,
+            Tier = 1,
+            SuggestedLevel = 1
         };
 
         switch (definition)
@@ -74,6 +76,7 @@ internal static class CatalogMapper
             Name = enemy.Name,
             WeaponItemId = enemy.Weapon.Id,
             ExperienceReward = enemy.ExperienceReward,
+            ThreatRating = enemy.ThreatRating,
             SpawnWeight = new EnemySpawnWeightEntity
             {
                 EnemyDefinitionId = enemy.Id,
@@ -136,7 +139,8 @@ internal static class CatalogMapper
                     drop.MinQuantity,
                     drop.MaxQuantity,
                     drop.Weight))
-                .ToArray());
+                .ToArray(),
+            entity.ThreatRating);
 
         return new WeightedEnemyDefinition(enemy, entity.SpawnWeight?.Weight ?? 0);
     }

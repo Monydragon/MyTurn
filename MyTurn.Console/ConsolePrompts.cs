@@ -4,6 +4,13 @@ using Spectre.Console;
 
 namespace MyTurn.Console;
 
+internal enum PartyManagementAction
+{
+    ViewParty,
+    MoveActiveToReserve,
+    MoveReserveToActive
+}
+
 internal static class ConsolePrompts
 {
     private sealed record MenuOption<T>(string Label, T Value);
@@ -17,13 +24,21 @@ internal static class ConsolePrompts
                 .AddChoices(Enum.GetValues<MainMenuAction>()));
     }
 
-    public static CreateActorRequest PromptForActor()
+    public static CreateActorRequest PromptForActor(string generatedName)
     {
-        var name = AnsiConsole.Prompt(
-            new TextPrompt<string>("What is your name?")
-                .PromptStyle("green")
-                .ValidationErrorMessage("[red]That's not a valid name[/]")
-                .Validate(name => !string.IsNullOrWhiteSpace(name)));
+        ArgumentException.ThrowIfNullOrWhiteSpace(generatedName);
+
+        var nameMode = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Name")
+                .AddChoices("Enter Name", $"Use {generatedName}"));
+        var name = nameMode == "Enter Name"
+            ? AnsiConsole.Prompt(
+                new TextPrompt<string>("What is your name?")
+                    .PromptStyle("green")
+                    .ValidationErrorMessage("[red]That's not a valid name[/]")
+                    .Validate(name => !string.IsNullOrWhiteSpace(name)))
+            : generatedName;
 
         var age = AnsiConsole.Prompt(
             new TextPrompt<int>("What is your age?")
@@ -51,6 +66,16 @@ internal static class ConsolePrompts
                 .AddChoices(Enum.GetValues<CharacterClass>()));
 
         return new CreateActorRequest(name, age, gender, species, characterClass);
+    }
+
+    public static int PromptForStartingPartySize()
+    {
+        return AnsiConsole.Prompt(
+            new TextPrompt<int>("How many starting party members? [grey](1-4)[/]")
+                .PromptStyle("green")
+                .DefaultValue(1)
+                .ValidationErrorMessage("[red]Party size must be between 1 and 4.[/]")
+                .Validate(size => size is >= Party.MinActiveMembers and <= Party.MaxActiveMembers));
     }
 
     public static bool ConfirmCharacter()
@@ -82,6 +107,47 @@ internal static class ConsolePrompts
                 .Title("What would you like to do?")
                 .UseConverter(action => action.GetDisplayName())
                 .AddChoices(Enum.GetValues<CharacterHubAction>()));
+    }
+
+    public static Actor PromptForPartyMember(IEnumerable<Actor> members, string title)
+    {
+        var choices = members.ToArray();
+
+        if (choices.Length == 0)
+        {
+            throw new InvalidOperationException("No party members are available.");
+        }
+
+        return AnsiConsole.Prompt(
+            new SelectionPrompt<Actor>()
+                .Title(title)
+                .UseConverter(member => $"{member.Name} - {member.CharacterClass.GetDisplayName()} ({member.Stats[StatType.Health].CurrentValue}/{member.Stats[StatType.Health].MaxValue} HP)")
+                .AddChoices(choices));
+    }
+
+    public static PartyManagementAction PromptForPartyManagementAction(Party party)
+    {
+        var options = new List<MenuOption<PartyManagementAction>>
+        {
+            new("View party", PartyManagementAction.ViewParty)
+        };
+
+        if (party.ActiveMembers.Count > Party.MinActiveMembers)
+        {
+            options.Add(new MenuOption<PartyManagementAction>("Move active member to reserve", PartyManagementAction.MoveActiveToReserve));
+        }
+
+        if (party.ReserveMembers.Count > 0 && party.ActiveMembers.Count < Party.MaxActiveMembers)
+        {
+            options.Add(new MenuOption<PartyManagementAction>("Move reserve member to active party", PartyManagementAction.MoveReserveToActive));
+        }
+
+        return AnsiConsole.Prompt(
+            new SelectionPrompt<MenuOption<PartyManagementAction>>()
+                .Title("Manage Party")
+                .UseConverter(option => option.Label)
+                .AddChoices(options))
+            .Value;
     }
 
     public static int? PromptForEncounterSeed()

@@ -18,7 +18,7 @@ internal static class Program
             switch (state)
             {
                 case GameFlowState.MainMenu:
-                    state = RunMainMenu(services);
+                    state = RunMainMenu(services, ref gameSession);
                     break;
 
                 case GameFlowState.CharacterCreation:
@@ -44,19 +44,39 @@ internal static class Program
         ActorConsoleRenderer.ShowExit();
     }
 
-    private static GameFlowState RunMainMenu(ApplicationServices services)
+    private static GameFlowState RunMainMenu(ApplicationServices services, ref GameSession? gameSession)
     {
         ActorConsoleRenderer.ShowTitle();
         var action = ConsolePrompts.PromptForMainMenuAction();
 
+        if (action == MainMenuAction.QuickStart)
+        {
+            gameSession = RunQuickStart(services);
+            return GameFlowState.CharacterHub;
+        }
+
         return services.GameFlowService.GetNextState(action);
+    }
+
+    private static GameSession RunQuickStart(ApplicationServices services)
+    {
+        var party = services.QuickStartPartyFactory.CreateParty();
+        var gameSession = services.GamePersistence!.CreateSave(party);
+
+        ActorConsoleRenderer.ShowCreated(party);
+
+        return gameSession;
     }
 
     private static GameFlowState RunCharacterCreation(ApplicationServices services, out GameSession gameSession)
     {
-        while (true)
+        var partySize = ConsolePrompts.PromptForStartingPartySize();
+        var actors = new List<Actor>();
+
+        while (actors.Count < partySize)
         {
-            var request = ConsolePrompts.PromptForActor();
+            AnsiConsole.MarkupLineInterpolated($"[grey]Creating party member {actors.Count + 1} of {partySize}[/]");
+            var request = ConsolePrompts.PromptForActor(services.QuickStartPartyFactory.GenerateName());
             ActorConsoleRenderer.ShowCharacterPreview(request);
 
             if (!ConsolePrompts.ConfirmCharacter())
@@ -66,11 +86,15 @@ internal static class Program
             }
 
             var actor = services.ActorFactory.Create(request);
-            gameSession = services.GamePersistence!.CreateSave(actor);
             ActorConsoleRenderer.ShowCreated(actor);
-
-            return services.GameFlowService.GetStateAfterCharacterCreation();
+            actors.Add(actor);
         }
+
+        var party = services.PartyService.CreateParty(actors);
+        gameSession = services.GamePersistence!.CreateSave(party);
+        ActorConsoleRenderer.ShowCreated(party);
+
+        return services.GameFlowService.GetStateAfterCharacterCreation();
     }
 
     private static GameFlowState RunLoadGame(ApplicationServices services, out GameSession? gameSession)
@@ -89,48 +113,57 @@ internal static class Program
 
         if (gameSession.ActiveWorldSession is not null)
         {
-            services.WorldSessionService.SetActiveSession(gameSession.Actor, gameSession.ActiveWorldSession);
+            services.WorldSessionService.SetActiveSession(gameSession.Party, gameSession.ActiveWorldSession);
         }
 
-        ActorConsoleRenderer.ShowLoaded(gameSession.Actor);
+        ActorConsoleRenderer.ShowLoaded(gameSession.Party);
 
         return GameFlowState.CharacterHub;
     }
 
     private static GameFlowState RunCharacterHub(ApplicationServices services, ref GameSession gameSession)
     {
-        var actor = gameSession.Actor;
+        var party = gameSession.Party;
         var action = ConsolePrompts.PromptForCharacterHubAction();
 
         switch (action)
         {
-            case CharacterHubAction.ViewCharacter:
-                ActorConsoleRenderer.ShowCharacter(actor);
-                break;
-
             case CharacterHubAction.ExploreWorld:
                 RunExploreWorld(services, ref gameSession);
                 break;
 
             case CharacterHubAction.FightEncounter:
-                RunCombat(services, actor);
+                RunCombat(services, party);
                 services.GamePersistence!.Save(gameSession);
                 break;
 
+            case CharacterHubAction.ViewParty:
+                ActorConsoleRenderer.ShowParty(party);
+                break;
+
+            case CharacterHubAction.ManageParty:
+                ManageParty(services, party);
+                services.GamePersistence!.Save(gameSession);
+                break;
+
+            case CharacterHubAction.ViewCharacter:
+                ActorConsoleRenderer.ShowCharacter(ConsolePrompts.PromptForPartyMember(party.Roster, "Choose a party member:"));
+                break;
+
             case CharacterHubAction.ViewInventory:
-                ActorConsoleRenderer.ShowInventory(actor);
+                ActorConsoleRenderer.ShowInventory(party);
                 break;
 
             case CharacterHubAction.ViewStats:
-                ActorConsoleRenderer.ShowStats(actor);
+                ActorConsoleRenderer.ShowStats(ConsolePrompts.PromptForPartyMember(party.Roster, "Choose a party member:"));
                 break;
 
             case CharacterHubAction.ViewSkills:
-                ActorConsoleRenderer.ShowSkills(actor);
+                ActorConsoleRenderer.ShowSkills(ConsolePrompts.PromptForPartyMember(party.Roster, "Choose a party member:"));
                 break;
 
             case CharacterHubAction.ViewEquipment:
-                ActorConsoleRenderer.ShowEquipment(actor);
+                ActorConsoleRenderer.ShowEquipment(ConsolePrompts.PromptForPartyMember(party.Roster, "Choose a party member:"));
                 break;
 
             case CharacterHubAction.UseItem:
@@ -138,7 +171,7 @@ internal static class Program
                 break;
 
             case CharacterHubAction.EquipGear:
-                EquipGearFromInventory(services, actor);
+                EquipGearFromInventory(services, party);
                 services.GamePersistence!.Save(gameSession);
                 break;
         }
@@ -146,13 +179,14 @@ internal static class Program
         return services.GameFlowService.GetNextState(action);
     }
 
-    private static BattleOutcome RunCombat(ApplicationServices services, Actor actor, Encounter? encounterOverride = null)
+    private static BattleOutcome RunCombat(ApplicationServices services, Party party, Encounter? encounterOverride = null)
     {
         var encounter = encounterOverride ?? services.EncounterGenerator.Generate(seed: ConsolePrompts.PromptForEncounterSeed());
         var random = new SeededRandomSource(encounter.Seed);
-        var state = services.CombatService.StartEncounter(actor, encounter);
+        var state = services.CombatService.StartEncounter(party, encounter);
+        var battleLog = new List<string>();
 
-        ActorConsoleRenderer.ShowEncounter(encounter);
+        AddBattleLog(battleLog, $"[red]Encounter![/] {encounter.Enemies.Count} enemies appear.");
 
         while (!state.IsComplete)
         {
@@ -167,11 +201,11 @@ internal static class Program
 
                 if (combatant.Team == CombatTeam.Player)
                 {
-                    RunPlayerTurn(services, state, random);
+                    RunPlayerTurn(services, state, combatant, random, battleLog);
                 }
                 else
                 {
-                    RunEnemyTurn(services, state, combatant, random);
+                    RunEnemyTurn(services, state, combatant, random, battleLog);
                 }
             }
         }
@@ -180,6 +214,7 @@ internal static class Program
             ? services.CombatService.CompleteVictory(state, random)
             : services.CombatService.CompleteDefeat(state);
 
+        ActorConsoleRenderer.ShowBattleScreen(state, null, battleLog);
         ActorConsoleRenderer.ShowBattleOutcome(outcome);
 
         return outcome;
@@ -187,18 +222,16 @@ internal static class Program
 
     private static void RunExploreWorld(ApplicationServices services, ref GameSession gameSession)
     {
-        var actor = gameSession.Actor;
-        var seed = services.WorldSessionService.HasActiveSession(actor)
-            ? null
-            : ConsolePrompts.PromptForWorldSeed();
-        var session = services.WorldSessionService.GetOrCreate(actor, seed);
+        var party = gameSession.Party;
+        var session = services.WorldSessionService.GetOrCreate(party);
         gameSession = gameSession with { ActiveWorldSession = session };
         services.GamePersistence!.Save(gameSession);
         var keepExploring = true;
+        ExplorationResult? lastResult = null;
 
         while (keepExploring && !session.IsCompleted)
         {
-            ActorConsoleRenderer.ShowWorld(actor, session, services.MinimapService.CreateSnapshot(session));
+            ActorConsoleRenderer.ShowWorld(party, session, services.MinimapService.CreateSnapshot(session), lastResult);
             var key = System.Console.ReadKey(intercept: true);
 
             if (IsExploreExitKey(key.Key))
@@ -211,14 +244,15 @@ internal static class Program
                 continue;
             }
 
-            var result = services.ExplorationService.TryMove(actor, session, direction);
-            ActorConsoleRenderer.ShowWorldMessage(result);
+            var result = services.ExplorationService.TryMove(party, session, direction);
+            lastResult = result;
             services.GamePersistence!.Save(gameSession);
 
             switch (result.State)
             {
                 case ExplorationState.EnemyEncounter when result.Encounter is not null:
-                    var outcome = RunCombat(services, actor, result.Encounter);
+                    ActorConsoleRenderer.ShowWorld(party, session, services.MinimapService.CreateSnapshot(session), result);
+                    var outcome = RunCombat(services, party, result.Encounter);
 
                     if (outcome.OutcomeType == BattleOutcomeType.Victory)
                     {
@@ -234,6 +268,7 @@ internal static class Program
                     break;
 
                 case ExplorationState.ExitReached:
+                    ActorConsoleRenderer.ShowWorld(party, session, services.MinimapService.CreateSnapshot(session), result);
                     ActorConsoleRenderer.ShowWorldCompleted(session);
                     services.GamePersistence.Save(gameSession);
                     keepExploring = false;
@@ -242,83 +277,144 @@ internal static class Program
         }
     }
 
-    private static void RunPlayerTurn(ApplicationServices services, CombatState state, IRandomSource random)
+    private static void RunPlayerTurn(
+        ApplicationServices services,
+        CombatState state,
+        Combatant combatant,
+        IRandomSource random,
+        List<string> battleLog)
     {
         var turnConsumed = false;
 
         while (!turnConsumed && !state.IsComplete)
         {
-            ActorConsoleRenderer.ShowCombatants(state);
+            ActorConsoleRenderer.ShowBattleScreen(state, combatant, battleLog);
             var action = ConsolePrompts.PromptForCombatAction();
 
             switch (action)
             {
                 case CombatActionType.Attack:
                     var target = ConsolePrompts.PromptForEnemyTarget(state.LivingEnemies);
-                    var damage = services.CombatService.Attack(state.PlayerCombatant, target, random);
-                    ActorConsoleRenderer.ShowDamage(damage);
+                    var damage = services.CombatService.Attack(combatant, target, random);
+                    AddBattleLog(battleLog, FormatDamageLog(damage));
                     turnConsumed = true;
                     break;
 
                 case CombatActionType.UseConsumable:
-                    if (!ConsolePrompts.TryPromptForConsumable(state.Player.Inventory, out var itemId))
+                    if (!ConsolePrompts.TryPromptForConsumable(state.Party.Inventory, out var itemId))
                     {
-                        ActorConsoleRenderer.ShowNoAvailableItems("No consumables are available.");
+                        AddBattleLog(battleLog, "[yellow]No consumables are available.[/]");
                         break;
                     }
 
                     var healing = services.CombatService.UseConsumable(state, itemId!);
-                    ActorConsoleRenderer.ShowHealing(healing);
+                    AddBattleLog(battleLog, FormatHealingLog(healing));
                     turnConsumed = true;
                     break;
 
                 case CombatActionType.Defend:
-                    services.CombatService.Defend(state.PlayerCombatant);
-                    ActorConsoleRenderer.ShowDefend(state.PlayerCombatant);
+                    services.CombatService.Defend(combatant);
+                    AddBattleLog(battleLog, $"[yellow]{Markup.Escape(combatant.Name)}[/] guards.");
                     turnConsumed = true;
                     break;
 
                 case CombatActionType.ChangeEquipment:
-                    if (!ConsolePrompts.TryPromptForEquipmentItem(state.Player.Inventory, out var item))
+                    if (!ConsolePrompts.TryPromptForEquipmentItem(state.Party.Inventory, out var item))
                     {
-                        ActorConsoleRenderer.ShowNoAvailableItems("No equipment is available.");
+                        AddBattleLog(battleLog, "[yellow]No equipment is available.[/]");
                         break;
                     }
 
-                    services.CombatService.ChangeEquipment(state, item!);
-                    ActorConsoleRenderer.ShowGearChanged(item!);
+                    var equipment = item!;
+                    services.CombatService.ChangeEquipment(state, combatant, equipment);
+                    AddBattleLog(battleLog, $"[green]{Markup.Escape(combatant.Name)}[/] equips [yellow]{Markup.Escape(equipment.Name)}[/].");
                     break;
 
                 case CombatActionType.ViewCombatants:
-                    ActorConsoleRenderer.ShowCombatants(state);
+                    AddBattleLog(battleLog, "[grey]You study the battlefield.[/]");
                     break;
             }
         }
     }
 
-    private static void RunEnemyTurn(ApplicationServices services, CombatState state, Combatant enemy, IRandomSource random)
+    private static void RunEnemyTurn(
+        ApplicationServices services,
+        CombatState state,
+        Combatant enemy,
+        IRandomSource random,
+        List<string> battleLog)
     {
         var result = services.CombatService.ResolveEnemyTurn(state, enemy, random);
 
         if (result.DamageResult is not null)
         {
-            ActorConsoleRenderer.ShowDamage(result.DamageResult);
+            AddBattleLog(battleLog, FormatDamageLog(result.DamageResult));
             return;
         }
 
-        ActorConsoleRenderer.ShowDefend(enemy);
+        AddBattleLog(battleLog, $"[yellow]{Markup.Escape(enemy.Name)}[/] guards.");
     }
 
-    private static void EquipGearFromInventory(ApplicationServices services, Actor actor)
+    private static void AddBattleLog(List<string> battleLog, string message)
     {
-        if (!ConsolePrompts.TryPromptForEquipmentItem(actor.Inventory, out var item))
+        const int maxLogEntries = 8;
+
+        battleLog.Add(message);
+
+        if (battleLog.Count > maxLogEntries)
+        {
+            battleLog.RemoveAt(0);
+        }
+    }
+
+    private static string FormatDamageLog(DamageResult result)
+    {
+        var critical = result.IsCritical ? " [bold yellow]Critical![/]" : string.Empty;
+        var defeated = result.TargetDefeated ? " [red]Defeated![/]" : string.Empty;
+
+        return $"[yellow]{Markup.Escape(result.Attacker.Name)}[/] hits [yellow]{Markup.Escape(result.Target.Name)}[/] for [red]{result.Damage}[/].{critical}{defeated}";
+    }
+
+    private static string FormatHealingLog(HealingResult result)
+    {
+        return $"[green]{Markup.Escape(result.Target.Name)}[/] uses [yellow]{Markup.Escape(result.Consumable.Name)}[/] and heals [green]{result.AmountHealed}[/].";
+    }
+
+    private static void EquipGearFromInventory(ApplicationServices services, Party party)
+    {
+        if (!ConsolePrompts.TryPromptForEquipmentItem(party.Inventory, out var item))
         {
             ActorConsoleRenderer.ShowNoAvailableItems("No equipment is available.");
             return;
         }
 
+        var actor = ConsolePrompts.PromptForPartyMember(party.ActiveMembers, "Equip to:");
         services.EquipmentService.Equip(actor, item!);
         ActorConsoleRenderer.ShowGearChanged(item!);
+    }
+
+    private static void ManageParty(ApplicationServices services, Party party)
+    {
+        var action = ConsolePrompts.PromptForPartyManagementAction(party);
+
+        switch (action)
+        {
+            case PartyManagementAction.MoveActiveToReserve:
+                var activeMember = ConsolePrompts.PromptForPartyMember(party.ActiveMembers, "Move to reserve:");
+                services.PartyService.MoveToReserve(party, activeMember.Id);
+                ActorConsoleRenderer.ShowParty(party);
+                break;
+
+            case PartyManagementAction.MoveReserveToActive:
+                var reserveMember = ConsolePrompts.PromptForPartyMember(party.ReserveMembers, "Move to active party:");
+                services.PartyService.MoveToActive(party, reserveMember.Id);
+                ActorConsoleRenderer.ShowParty(party);
+                break;
+
+            case PartyManagementAction.ViewParty:
+                ActorConsoleRenderer.ShowParty(party);
+                break;
+        }
     }
 
     private static bool TryGetDirection(ConsoleKey key, out Direction direction)

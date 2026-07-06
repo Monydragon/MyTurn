@@ -14,6 +14,10 @@ public sealed class ApplicationServices
     public IItemDefinitionRegistry ItemDefinitions { get; }
     public ILootService LootService { get; }
     public IMinimapService MinimapService { get; }
+    public IPartyService PartyService { get; }
+    public IQuickStartPartyFactory QuickStartPartyFactory { get; }
+    public IRecruitmentService RecruitmentService { get; }
+    public IEncounterDifficultyService EncounterDifficultyService { get; }
     public ISkillExperienceService SkillExperienceService { get; }
     public IStartingEquipmentService StartingEquipmentService { get; }
     public ITreasureLootService TreasureLootService { get; }
@@ -37,6 +41,10 @@ public sealed class ApplicationServices
         IItemDefinitionRegistry itemDefinitions,
         ILootService lootService,
         IMinimapService minimapService,
+        IPartyService partyService,
+        IQuickStartPartyFactory quickStartPartyFactory,
+        IRecruitmentService recruitmentService,
+        IEncounterDifficultyService encounterDifficultyService,
         ISkillExperienceService skillExperienceService,
         IStartingEquipmentService startingEquipmentService,
         ITreasureLootService treasureLootService,
@@ -59,6 +67,10 @@ public sealed class ApplicationServices
         ItemDefinitions = itemDefinitions;
         LootService = lootService;
         MinimapService = minimapService;
+        PartyService = partyService;
+        QuickStartPartyFactory = quickStartPartyFactory;
+        RecruitmentService = recruitmentService;
+        EncounterDifficultyService = encounterDifficultyService;
         SkillExperienceService = skillExperienceService;
         StartingEquipmentService = startingEquipmentService;
         TreasureLootService = treasureLootService;
@@ -89,6 +101,9 @@ public sealed class ApplicationServices
         var worldSessionService = new WorldSessionService(worldGenerator);
         var explorationService = new WorldExplorationService(encounterGenerator, treasureLootService);
         var minimapService = new MinimapService();
+        var partyService = new PartyService();
+        var recruitmentService = new RecruitmentService();
+        var encounterDifficultyService = new EncounterDifficultyService();
         var gameFlowService = new GameFlowService();
         var actorFactory = new DefaultActorFactory(
             skillDefinitions,
@@ -96,6 +111,7 @@ public sealed class ApplicationServices
             startingEquipmentService,
             inventoryService,
             characterCreationValidator);
+        var quickStartPartyFactory = new QuickStartPartyFactory(actorFactory, partyService);
         var skillExperienceService = new SkillExperienceService();
 
         return new ApplicationServices(
@@ -111,6 +127,10 @@ public sealed class ApplicationServices
             itemDefinitions,
             lootService,
             minimapService,
+            partyService,
+            quickStartPartyFactory,
+            recruitmentService,
+            encounterDifficultyService,
             skillExperienceService,
             startingEquipmentService,
             treasureLootService,

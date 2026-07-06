@@ -6,6 +6,8 @@ public sealed class ItemDefinitionEntity
     public string Name { get; set; } = string.Empty;
     public string Kind { get; set; } = string.Empty;
     public bool IsStackable { get; set; }
+    public int Tier { get; set; } = 1;
+    public int SuggestedLevel { get; set; } = 1;
     public string? WeaponType { get; set; }
     public int? MinDamage { get; set; }
     public int? MaxDamage { get; set; }
@@ -29,6 +31,7 @@ public sealed class EnemyDefinitionEntity
     public string Name { get; set; } = string.Empty;
     public string WeaponItemId { get; set; } = string.Empty;
     public int ExperienceReward { get; set; }
+    public int ThreatRating { get; set; } = 1;
     public ItemDefinitionEntity? WeaponItem { get; set; }
     public EnemySpawnWeightEntity? SpawnWeight { get; set; }
     public List<EnemyStatEntity> Stats { get; set; } = [];
@@ -80,11 +83,14 @@ public sealed class SaveSlotEntity
     public string Name { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
     public DateTime LastPlayedAtUtc { get; set; }
-    public PlayerEntity? Player { get; set; }
+    public long Steps { get; set; }
+    public long Currency { get; set; }
+    public List<PartyMemberEntity> PartyMembers { get; set; } = [];
+    public List<PartyInventoryStackEntity> InventoryStacks { get; set; } = [];
     public List<WorldSessionEntity> WorldSessions { get; set; } = [];
 }
 
-public sealed class PlayerEntity
+public sealed class PartyMemberEntity
 {
     public Guid Id { get; set; }
     public Guid SaveSlotId { get; set; }
@@ -94,53 +100,53 @@ public sealed class PlayerEntity
     public string Species { get; set; } = string.Empty;
     public string CharacterClass { get; set; } = string.Empty;
     public long Steps { get; set; }
-    public long Currency { get; set; }
+    public string Location { get; set; } = string.Empty;
+    public int? ActiveOrder { get; set; }
     public SaveSlotEntity? SaveSlot { get; set; }
-    public List<PlayerStatEntity> Stats { get; set; } = [];
-    public List<PlayerSkillEntity> Skills { get; set; } = [];
-    public List<PlayerInventoryStackEntity> InventoryStacks { get; set; } = [];
-    public List<PlayerEquipmentEntity> Equipment { get; set; } = [];
+    public List<PartyMemberStatEntity> Stats { get; set; } = [];
+    public List<PartyMemberSkillEntity> Skills { get; set; } = [];
+    public List<PartyMemberEquipmentEntity> Equipment { get; set; } = [];
 }
 
-public sealed class PlayerStatEntity
+public sealed class PartyMemberStatEntity
 {
     public int Id { get; set; }
-    public Guid PlayerId { get; set; }
+    public Guid PartyMemberId { get; set; }
     public string StatType { get; set; } = string.Empty;
     public int BaseValue { get; set; }
     public int MaxValue { get; set; }
-    public PlayerEntity? Player { get; set; }
+    public PartyMemberEntity? PartyMember { get; set; }
 }
 
-public sealed class PlayerSkillEntity
+public sealed class PartyMemberSkillEntity
 {
     public int Id { get; set; }
-    public Guid PlayerId { get; set; }
+    public Guid PartyMemberId { get; set; }
     public string SkillType { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public int CurrentLevel { get; set; }
     public int Experience { get; set; }
     public int MaxLevel { get; set; }
-    public PlayerEntity? Player { get; set; }
+    public PartyMemberEntity? PartyMember { get; set; }
 }
 
-public sealed class PlayerInventoryStackEntity
+public sealed class PartyInventoryStackEntity
 {
     public int Id { get; set; }
-    public Guid PlayerId { get; set; }
+    public Guid SaveSlotId { get; set; }
     public string ItemId { get; set; } = string.Empty;
     public int Quantity { get; set; }
-    public PlayerEntity? Player { get; set; }
+    public SaveSlotEntity? SaveSlot { get; set; }
     public ItemDefinitionEntity? ItemDefinition { get; set; }
 }
 
-public sealed class PlayerEquipmentEntity
+public sealed class PartyMemberEquipmentEntity
 {
     public int Id { get; set; }
-    public Guid PlayerId { get; set; }
+    public Guid PartyMemberId { get; set; }
     public string Slot { get; set; } = string.Empty;
     public string ItemId { get; set; } = string.Empty;
-    public PlayerEntity? Player { get; set; }
+    public PartyMemberEntity? PartyMember { get; set; }
     public ItemDefinitionEntity? ItemDefinition { get; set; }
 }
 

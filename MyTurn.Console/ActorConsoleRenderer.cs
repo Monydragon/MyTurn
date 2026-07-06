@@ -35,10 +35,56 @@ internal static class ActorConsoleRenderer
             $"[green]Character created![/] Name: [yellow]{actor.Name}[/], Age: [yellow]{actor.Age}[/], Gender: [yellow]{actor.Gender.GetDisplayName()}[/], Species: [yellow]{actor.Species.GetDisplayName()}[/], Character Class: [yellow]{actor.CharacterClass.GetDisplayName()}[/]");
     }
 
+    public static void ShowCreated(Party party)
+    {
+        AnsiConsole.MarkupLineInterpolated(
+            $"[green]Party created![/] Leader: [yellow]{party.Leader.Name}[/], Active Members: [yellow]{party.ActiveMembers.Count}[/]");
+        ShowParty(party);
+    }
+
     public static void ShowLoaded(Actor actor)
     {
         AnsiConsole.MarkupLineInterpolated(
             $"[green]Save loaded![/] Name: [yellow]{actor.Name}[/], Class: [yellow]{actor.CharacterClass.GetDisplayName()}[/], Steps: [yellow]{actor.Steps}[/]");
+    }
+
+    public static void ShowLoaded(Party party)
+    {
+        AnsiConsole.MarkupLineInterpolated(
+            $"[green]Save loaded![/] Leader: [yellow]{party.Leader.Name}[/], Active Members: [yellow]{party.ActiveMembers.Count}[/], Steps: [yellow]{party.Steps}[/]");
+    }
+
+    public static void ShowParty(Party party)
+    {
+        var table = new Table()
+            .Title("Party")
+            .AddColumn("Status")
+            .AddColumn("Name")
+            .AddColumn("Class")
+            .AddColumn(new TableColumn("HP").RightAligned())
+            .AddColumn("Weapon");
+
+        foreach (var member in party.ActiveMembers)
+        {
+            table.AddRow(
+                member == party.Leader ? "Leader" : "Active",
+                member.Name,
+                member.CharacterClass.GetDisplayName(),
+                $"{member.Stats[StatType.Health].CurrentValue}/{member.Stats[StatType.Health].MaxValue}",
+                member.Equipment.EquippedWeapon.Name);
+        }
+
+        foreach (var member in party.ReserveMembers)
+        {
+            table.AddRow(
+                "Reserve",
+                member.Name,
+                member.CharacterClass.GetDisplayName(),
+                $"{member.Stats[StatType.Health].CurrentValue}/{member.Stats[StatType.Health].MaxValue}",
+                member.Equipment.EquippedWeapon.Name);
+        }
+
+        AnsiConsole.Write(table);
     }
 
     public static void ShowCharacter(Actor actor)
@@ -84,6 +130,24 @@ internal static class ActorConsoleRenderer
         table.AddRow("Currency", ItemKind.Currency.GetDisplayName(), actor.Inventory.Currency.ToString());
 
         foreach (var stack in actor.Inventory.Items.OrderBy(stack => stack.Item.Kind).ThenBy(stack => stack.Item.Name))
+        {
+            table.AddRow(stack.Item.Name, stack.Item.Kind.GetDisplayName(), stack.Quantity.ToString());
+        }
+
+        AnsiConsole.Write(table);
+    }
+
+    public static void ShowInventory(Party party)
+    {
+        var table = new Table()
+            .Title("Party Inventory")
+            .AddColumn("Item")
+            .AddColumn("Kind")
+            .AddColumn(new TableColumn("Qty").RightAligned());
+
+        table.AddRow("Currency", ItemKind.Currency.GetDisplayName(), party.Inventory.Currency.ToString());
+
+        foreach (var stack in party.Inventory.Items.OrderBy(stack => stack.Item.Kind).ThenBy(stack => stack.Item.Name))
         {
             table.AddRow(stack.Item.Name, stack.Item.Kind.GetDisplayName(), stack.Quantity.ToString());
         }
@@ -168,6 +232,33 @@ internal static class ActorConsoleRenderer
         AnsiConsole.Write(table);
     }
 
+    public static void ShowBattleScreen(CombatState state, Combatant? actingCombatant, IReadOnlyList<string> battleLog)
+    {
+        AnsiConsole.Clear();
+        AnsiConsole.Write(new Rule($"[bold red]Battle Seed {state.Seed}[/]").RuleStyle("grey"));
+
+        var topGrid = new Grid();
+        topGrid.AddColumn();
+        topGrid.AddColumn();
+        topGrid.AddRow(new IRenderable[]
+        {
+            BuildEnemyBattlePanel(state, actingCombatant),
+            BuildPartyBattlePanel(state, actingCombatant)
+        });
+
+        var bottomGrid = new Grid();
+        bottomGrid.AddColumn();
+        bottomGrid.AddColumn();
+        bottomGrid.AddRow(new IRenderable[]
+        {
+            BuildBattleLogPanel(battleLog),
+            BuildBattleInfoPanel(state, actingCombatant)
+        });
+
+        AnsiConsole.Write(topGrid);
+        AnsiConsole.Write(bottomGrid);
+    }
+
     public static void ShowCombatants(CombatState state)
     {
         var table = new Table()
@@ -178,7 +269,7 @@ internal static class ActorConsoleRenderer
             .AddColumn(new TableColumn("Speed").RightAligned())
             .AddColumn("Status");
 
-        foreach (var combatant in state.Enemies.Append(state.PlayerCombatant))
+        foreach (var combatant in state.Enemies.Concat(state.PartyCombatants))
         {
             table.AddRow(
                 combatant.Team.GetDisplayName(),
@@ -259,6 +350,24 @@ internal static class ActorConsoleRenderer
         AnsiConsole.MarkupLine("[grey]Move with [bold]WASD[/] or arrow keys. Press [bold]Q[/] or [bold]Escape[/] to return to the hub.[/]");
     }
 
+    public static void ShowWorld(Party party, WorldSession session, MinimapSnapshot minimap, ExplorationResult? result = null)
+    {
+        AnsiConsole.Clear();
+        AnsiConsole.Write(new Rule($"[bold green]World Seed {session.Map.Seed}[/]").RuleStyle("grey"));
+
+        var worldView = new Grid();
+        worldView.AddColumn();
+        worldView.AddColumn();
+        worldView.AddRow(new IRenderable[]
+        {
+            BuildMapPanel(session, minimap),
+            BuildWorldStatusPanel(party, session, result)
+        });
+
+        AnsiConsole.Write(worldView);
+        AnsiConsole.MarkupLine("[grey]Move with [bold]WASD[/] or arrow keys. Press [bold]Q[/] or [bold]Escape[/] to return to the hub.[/]");
+    }
+
     public static void ShowWorldMessage(ExplorationResult result)
     {
         var color = result.State switch
@@ -310,6 +419,116 @@ internal static class ActorConsoleRenderer
             .AddRow("Class", characterClass)
             .AddRow("Steps", steps)
             .AddRow("Equipped Weapon", equippedWeapon);
+    }
+
+    private static Panel BuildEnemyBattlePanel(CombatState state, Combatant? actingCombatant)
+    {
+        var table = new Table()
+            .NoBorder()
+            .AddColumn("Enemy")
+            .AddColumn(new TableColumn("HP").RightAligned())
+            .AddColumn("Status");
+
+        foreach (var enemy in state.Enemies)
+        {
+            table.AddRow(
+                FormatCombatantName(enemy, actingCombatant),
+                FormatHpBar(enemy.CurrentHealth, enemy.MaxHealth),
+                FormatCombatantStatus(enemy));
+        }
+
+        return new Panel(table)
+            .Header("Enemies")
+            .BorderColor(Color.Red);
+    }
+
+    private static Panel BuildPartyBattlePanel(CombatState state, Combatant? actingCombatant)
+    {
+        var table = new Table()
+            .NoBorder()
+            .AddColumn("Party")
+            .AddColumn(new TableColumn("HP").RightAligned())
+            .AddColumn("Status");
+
+        foreach (var member in state.PartyCombatants)
+        {
+            table.AddRow(
+                FormatCombatantName(member, actingCombatant),
+                FormatHpBar(member.CurrentHealth, member.MaxHealth),
+                FormatCombatantStatus(member));
+        }
+
+        return new Panel(table)
+            .Header("Party")
+            .BorderColor(Color.Green);
+    }
+
+    private static Panel BuildBattleLogPanel(IReadOnlyList<string> battleLog)
+    {
+        var lines = battleLog.Count == 0
+            ? new[] { "[grey]Battle begins.[/]" }
+            : battleLog.TakeLast(8);
+
+        return new Panel(string.Join(Environment.NewLine, lines))
+            .Header("Log")
+            .BorderColor(Color.Grey);
+    }
+
+    private static Panel BuildBattleInfoPanel(CombatState state, Combatant? actingCombatant)
+    {
+        var potionCount = state.Party.Inventory.Items
+            .Where(stack => stack.Item is ConsumableDefinition)
+            .Sum(stack => stack.Quantity);
+        var actorLine = actingCombatant is null
+            ? "[grey]Resolving...[/]"
+            : $"{Markup.Escape(actingCombatant.Name)} / {actingCombatant.Team.GetDisplayName()}";
+        var details = new Table()
+            .NoBorder()
+            .AddColumn("Field")
+            .AddColumn("Value")
+            .AddRow("[grey]Turn[/]", actorLine)
+            .AddRow("[grey]Potions[/]", potionCount.ToString())
+            .AddRow("[grey]Currency[/]", state.Party.Inventory.Currency.ToString())
+            .AddRow("[grey]Victory[/]", $"{state.LivingEnemies.Count} enemies left")
+            .AddRow("[grey]Defeat[/]", $"{state.LivingPartyMembers.Count} allies standing");
+
+        return new Panel(details)
+            .Header("Command")
+            .BorderColor(Color.Blue);
+    }
+
+    private static string FormatCombatantName(Combatant combatant, Combatant? actingCombatant)
+    {
+        var name = Markup.Escape(combatant.Name);
+
+        if (actingCombatant?.Id == combatant.Id)
+        {
+            return $"[bold yellow]> {name}[/]";
+        }
+
+        return combatant.IsAlive ? name : $"[grey]{name}[/]";
+    }
+
+    private static string FormatHpBar(int currentHealth, int maxHealth)
+    {
+        const int width = 14;
+
+        var safeMax = Math.Max(1, maxHealth);
+        var safeCurrent = Math.Clamp(currentHealth, 0, safeMax);
+        var filled = (int)Math.Round((double)safeCurrent / safeMax * width);
+        var color = safeCurrent <= safeMax * 0.25 ? "red" : safeCurrent <= safeMax * 0.5 ? "yellow" : "green";
+
+        return $"[{color}]{new string('#', filled)}[/][grey]{new string('-', width - filled)}[/] {safeCurrent}/{safeMax}";
+    }
+
+    private static string FormatCombatantStatus(Combatant combatant)
+    {
+        if (!combatant.IsAlive)
+        {
+            return "[red]Defeated[/]";
+        }
+
+        return combatant.IsDefending ? "[yellow]Guard[/]" : "[grey]Ready[/]";
     }
 
     private static Panel BuildMapPanel(WorldSession session, MinimapSnapshot minimap)
@@ -370,6 +589,78 @@ internal static class ActorConsoleRenderer
         return new Panel(panelGrid)
             .Header("Status")
             .BorderColor(GetRoomBorderColor(room));
+    }
+
+    private static Panel BuildWorldStatusPanel(Party party, WorldSession session, ExplorationResult? result)
+    {
+        var room = session.CurrentRoom;
+        var exploredRooms = session.Map.Rooms.Values.Count(currentRoom => currentRoom.IsVisited);
+        var totalRooms = session.Map.Rooms.Count;
+        var status = new Table()
+            .NoBorder()
+            .AddColumn("Field")
+            .AddColumn("Value")
+            .AddRow("[grey]Leader[/]", $"[yellow]{party.Leader.Name}[/]")
+            .AddRow("[grey]Active[/]", $"[yellow]{party.ActiveMembers.Count}[/]/[grey]{Party.MaxActiveMembers}[/]")
+            .AddRow("[grey]Position[/]", $"[white]X {session.CurrentPosition.X}, Y {session.CurrentPosition.Y}[/]")
+            .AddRow("[grey]Room[/]", FormatRoomType(room.RoomType))
+            .AddRow("[grey]Status[/]", FormatRoomStatus(room))
+            .AddRow("[grey]Steps[/]", $"[yellow]{party.Steps}[/]")
+            .AddRow("[grey]Explored[/]", $"[green]{exploredRooms}[/]/[grey]{totalRooms}[/]");
+
+        var legend = new Grid();
+        legend.AddColumn();
+        legend.AddColumn();
+        AddLegendRow(legend, "[bold white on green] @ [/]", "Party");
+        AddLegendRow(legend, "[bold white on blue] S [/]", "Start");
+        AddLegendRow(legend, "[bold white on purple] E [/]", "Exit");
+        AddLegendRow(legend, "[bold white on red] ! [/]", "Enemy");
+        AddLegendRow(legend, "[bold black on yellow] $ [/]", "Treasure");
+        AddLegendRow(legend, "[white on black] . [/]", "Cleared");
+        AddLegendRow(legend, "[grey on black] ? [/]", "Scouted");
+
+        var panelGrid = new Grid();
+        panelGrid.AddColumn();
+        panelGrid.AddRow(new IRenderable[] { status });
+        panelGrid.AddEmptyRow();
+        panelGrid.AddRow(new IRenderable[] { new Markup("[bold]Legend[/]") });
+        panelGrid.AddRow(new IRenderable[] { legend });
+
+        if (result is not null)
+        {
+            panelGrid.AddEmptyRow();
+            panelGrid.AddRow(new IRenderable[] { BuildWorldEventPanel(result) });
+        }
+
+        return new Panel(panelGrid)
+            .Header("Status")
+            .BorderColor(GetRoomBorderColor(room));
+    }
+
+    private static Panel BuildWorldEventPanel(ExplorationResult result)
+    {
+        var color = result.State switch
+        {
+            ExplorationState.Blocked => Color.Red,
+            ExplorationState.EnemyEncounter => Color.Red,
+            ExplorationState.TreasureFound => Color.Yellow,
+            ExplorationState.ExitReached => Color.Green,
+            _ => Color.Grey
+        };
+        var lines = new List<string>
+        {
+            Markup.Escape(result.Message)
+        };
+
+        if (result.Reward != LootReward.Empty)
+        {
+            lines.Add($"Currency: {result.Reward.Currency}");
+            lines.AddRange(result.Reward.Items.Select(item => $"{Markup.Escape(item.Item.Name)} x{item.Quantity}"));
+        }
+
+        return new Panel(string.Join(Environment.NewLine, lines))
+            .Header("Event")
+            .BorderColor(color);
     }
 
     private static void AddLegendRow(Grid legend, string sample, string label)

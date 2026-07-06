@@ -25,18 +25,25 @@ public sealed class CombatService : ICombatService
     public CombatState StartEncounter(Actor player, Encounter encounter, int? seed = null)
     {
         ArgumentNullException.ThrowIfNull(player);
+
+        return StartEncounter(new Party([player], inventory: player.Inventory, steps: player.Steps), encounter, seed);
+    }
+
+    public CombatState StartEncounter(Party party, Encounter encounter, int? seed = null)
+    {
+        ArgumentNullException.ThrowIfNull(party);
         ArgumentNullException.ThrowIfNull(encounter);
 
-        var playerCombatant = new Combatant(
-            player.Name,
+        var partyCombatants = party.ActiveMembers.Select(member => new Combatant(
+            member.Name,
             CombatTeam.Player,
-            player.Stats,
-            player.Equipment,
-            player);
+            member.Stats,
+            member.Equipment,
+            member));
 
         var enemies = encounter.Enemies.Select(CreateEnemyCombatant);
 
-        return new CombatState(player, playerCombatant, enemies, seed ?? encounter.Seed);
+        return new CombatState(party, partyCombatants, enemies, seed ?? encounter.Seed);
     }
 
     public IReadOnlyList<Combatant> GetTurnOrder(CombatState state)
@@ -44,7 +51,7 @@ public sealed class CombatService : ICombatService
         ArgumentNullException.ThrowIfNull(state);
 
         return state.Enemies
-            .Append(state.PlayerCombatant)
+            .Concat(state.PartyCombatants)
             .Where(combatant => combatant.IsAlive)
             .OrderByDescending(combatant => combatant.Stats[StatType.Speed].CurrentValue)
             .ThenBy(combatant => combatant.Team)
@@ -101,8 +108,20 @@ public sealed class CombatService : ICombatService
 
     public CombatActionResolution ChangeEquipment(CombatState state, IEquipmentItem item)
     {
+        return ChangeEquipment(state, state.PlayerCombatant, item);
+    }
+
+    public CombatActionResolution ChangeEquipment(CombatState state, Combatant combatant, IEquipmentItem item)
+    {
         ArgumentNullException.ThrowIfNull(state);
-        _equipmentService.Equip(state.Player, item);
+        ArgumentNullException.ThrowIfNull(combatant);
+
+        if (combatant.Team != CombatTeam.Player || combatant.Actor is null)
+        {
+            throw new InvalidOperationException("Only party members can change equipment.");
+        }
+
+        _equipmentService.Equip(combatant.Actor, item);
 
         return new CombatActionResolution(CombatActionType.ChangeEquipment, false);
     }
@@ -116,14 +135,18 @@ public sealed class CombatService : ICombatService
             throw new InvalidOperationException($"Item '{itemId}' is not a consumable.");
         }
 
-        if (!state.Player.Inventory.Remove(itemId))
+        if (!state.Party.Inventory.Remove(itemId))
         {
             throw new InvalidOperationException($"Item '{consumable.Name}' is not available.");
         }
 
-        var amountHealed = state.PlayerCombatant.Heal(consumable.HealingAmount);
+        var target = state.LivingPartyMembers
+            .OrderBy(member => member.CurrentHealth)
+            .FirstOrDefault()
+            ?? state.PlayerCombatant;
+        var amountHealed = target.Heal(consumable.HealingAmount);
 
-        return new HealingResult(state.PlayerCombatant, consumable, amountHealed);
+        return new HealingResult(target, consumable, amountHealed);
     }
 
     public EnemyTurnResult ResolveEnemyTurn(CombatState state, Combatant enemy, IRandomSource random)
@@ -145,7 +168,9 @@ public sealed class CombatService : ICombatService
             return new EnemyTurnResult(enemy, action, null);
         }
 
-        return new EnemyTurnResult(enemy, action, Attack(enemy, state.PlayerCombatant, random));
+        var target = ChooseEnemyTarget(state, random);
+
+        return new EnemyTurnResult(enemy, action, Attack(enemy, target, random));
     }
 
     public BattleOutcome CompleteVictory(CombatState state, IRandomSource random)
@@ -164,18 +189,29 @@ public sealed class CombatService : ICombatService
             .ToArray();
         var reward = _lootService.RollLoot(defeatedEnemies, random);
 
-        state.Player.Inventory.AddCurrency(reward.Currency);
+        state.Party.Inventory.AddCurrency(reward.Currency);
 
         foreach (var itemReward in reward.Items)
         {
-            state.Player.Inventory.Add(itemReward.Item, itemReward.Quantity);
+            state.Party.Inventory.Add(itemReward.Item, itemReward.Quantity);
         }
 
         var experience = defeatedEnemies.Sum(enemy => enemy.ExperienceReward);
-        var skillType = GetSkillType(state.Player.Equipment.EquippedWeapon.WeaponType);
-        state.Player.Skills[skillType].Leveling.AddExperience(experience);
+        var livingMembers = state.LivingPartyMembers
+            .Select(member => member.Actor)
+            .OfType<Actor>()
+            .ToArray();
+        var experienceShare = livingMembers.Length == 0 ? 0 : experience / livingMembers.Length;
+        SkillType? firstSkillType = null;
 
-        return new BattleOutcome(BattleOutcomeType.Victory, reward, skillType, experience);
+        foreach (var member in livingMembers)
+        {
+            var skillType = GetSkillType(member.Equipment.EquippedWeapon.WeaponType);
+            firstSkillType ??= skillType;
+            member.Skills[skillType].Leveling.AddExperience(experienceShare);
+        }
+
+        return new BattleOutcome(BattleOutcomeType.Victory, reward, firstSkillType, experience);
     }
 
     public BattleOutcome CompleteDefeat(CombatState state)
@@ -228,6 +264,39 @@ public sealed class CombatService : ICombatService
         }
 
         return EnemyActionType.BasicAttack;
+    }
+
+    private static Combatant ChooseEnemyTarget(CombatState state, IRandomSource random)
+    {
+        var candidates = state.LivingPartyMembers;
+
+        if (candidates.Count == 0)
+        {
+            return state.PlayerCombatant;
+        }
+
+        var weights = candidates
+            .Select(target => new
+            {
+                Target = target,
+                Weight = Math.Max(1, target.MaxHealth - target.CurrentHealth + 1)
+            })
+            .ToArray();
+        var totalWeight = weights.Sum(target => target.Weight);
+        var roll = random.NextInclusive(1, totalWeight);
+        var current = 0;
+
+        foreach (var candidate in weights)
+        {
+            current += candidate.Weight;
+
+            if (roll <= current)
+            {
+                return candidate.Target;
+            }
+        }
+
+        return weights[^1].Target;
     }
 
     private static StatType GetAttackStat(WeaponType weaponType)

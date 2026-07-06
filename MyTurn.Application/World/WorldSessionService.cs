@@ -12,40 +12,40 @@ public sealed class WorldSessionService : IWorldSessionService
         _worldGenerator = worldGenerator;
     }
 
-    public bool HasActiveSession(Actor actor)
+    public bool HasActiveSession(Party party)
     {
-        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentNullException.ThrowIfNull(party);
 
-        return _sessions.TryGetValue(actor.Id, out var session) && !session.IsCompleted;
+        return _sessions.TryGetValue(party.Id, out var session) && !session.IsCompleted;
     }
 
-    public WorldSession GetOrCreate(Actor actor, int? seed = null)
+    public WorldSession GetOrCreate(Party party, int? seed = null)
     {
-        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentNullException.ThrowIfNull(party);
 
-        if (_sessions.TryGetValue(actor.Id, out var session) && !session.IsCompleted)
+        if (_sessions.TryGetValue(party.Id, out var session) && !session.IsCompleted)
         {
             return session;
         }
 
-        return CreateNew(actor, seed);
+        return CreateNew(party, seed);
     }
 
-    public WorldSession CreateNew(Actor actor, int? seed = null)
+    public WorldSession CreateNew(Party party, int? seed = null)
     {
-        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentNullException.ThrowIfNull(party);
 
         var session = new WorldSession(_worldGenerator.Generate(new WorldGenerationRequest(seed)));
-        _sessions[actor.Id] = session;
+        _sessions[party.Id] = session;
 
         return session;
     }
 
-    public void SetActiveSession(Actor actor, WorldSession session)
+    public void SetActiveSession(Party party, WorldSession session)
     {
-        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentNullException.ThrowIfNull(party);
         ArgumentNullException.ThrowIfNull(session);
 
-        _sessions[actor.Id] = session;
+        _sessions[party.Id] = session;
     }
 }

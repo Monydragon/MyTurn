@@ -71,6 +71,9 @@ public static class SqliteApplicationServices
         var worldSessionService = new WorldSessionService(worldGenerator);
         var explorationService = new WorldExplorationService(encounterGenerator, treasureLootService);
         var minimapService = new MinimapService();
+        var partyService = new PartyService();
+        var recruitmentService = new RecruitmentService();
+        var encounterDifficultyService = new EncounterDifficultyService();
         var gameFlowService = new GameFlowService();
         var actorFactory = new DefaultActorFactory(
             skillDefinitions,
@@ -78,6 +81,7 @@ public static class SqliteApplicationServices
             startingEquipmentService,
             inventoryService,
             characterCreationValidator);
+        var quickStartPartyFactory = new QuickStartPartyFactory(actorFactory, partyService);
         var skillExperienceService = new SkillExperienceService();
         var persistence = new SqliteGamePersistenceService(
             options,
@@ -99,6 +103,10 @@ public static class SqliteApplicationServices
             catalog.ItemDefinitions,
             lootService,
             minimapService,
+            partyService,
+            quickStartPartyFactory,
+            recruitmentService,
+            encounterDifficultyService,
             skillExperienceService,
             startingEquipmentService,
             treasureLootService,
