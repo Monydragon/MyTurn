@@ -155,6 +155,9 @@ public sealed class WorldSessionEntity
     public Guid Id { get; set; }
     public Guid SaveSlotId { get; set; }
     public int Seed { get; set; }
+    public string? LayoutId { get; set; }
+    public string? ProfileId { get; set; }
+    public string? LayoutSource { get; set; }
     public int MinCoordinate { get; set; }
     public int MaxCoordinate { get; set; }
     public int CurrentX { get; set; }
@@ -164,6 +167,7 @@ public sealed class WorldSessionEntity
     public DateTime UpdatedAtUtc { get; set; }
     public SaveSlotEntity? SaveSlot { get; set; }
     public List<WorldRoomEntity> Rooms { get; set; } = [];
+    public List<WorldObjectEntity> Objects { get; set; } = [];
 }
 
 public sealed class WorldRoomEntity
@@ -177,5 +181,20 @@ public sealed class WorldRoomEntity
     public bool IsVisited { get; set; }
     public bool IsCleared { get; set; }
     public bool IsLooted { get; set; }
+    public WorldSessionEntity? WorldSession { get; set; }
+}
+
+public sealed class WorldObjectEntity
+{
+    public int Id { get; set; }
+    public Guid WorldSessionId { get; set; }
+    public string ObjectId { get; set; } = string.Empty;
+    public string ObjectType { get; set; } = string.Empty;
+    public int X { get; set; }
+    public int Y { get; set; }
+    public bool IsBlocking { get; set; }
+    public string State { get; set; } = string.Empty;
+    public int? EncounterSeed { get; set; }
+    public string PayloadJson { get; set; } = string.Empty;
     public WorldSessionEntity? WorldSession { get; set; }
 }

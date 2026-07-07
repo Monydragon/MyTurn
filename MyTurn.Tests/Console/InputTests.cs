@@ -1,4 +1,4 @@
-using MyTurn.Console.Input;
+using MyTurn.Presentation.Input;
 
 namespace MyTurn.Tests.Console;
 

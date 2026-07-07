@@ -33,8 +33,20 @@ public sealed class WorldExplorationService : IExplorationService
             return ExplorationResult.Blocked(session.CurrentRoom, "You cannot travel farther in that direction.");
         }
 
+        var blockingObject = session.BlockingObjectAt(nextPosition);
+
+        if (blockingObject is not null)
+        {
+            return ExplorationResult.Blocked(session.CurrentRoom, $"{blockingObject.ObjectType.GetDisplayName()} blocks the way.");
+        }
+
         session.MoveTo(nextPosition);
         party.AddSteps(1);
+
+        if (session.Objects.Count > 0)
+        {
+            return new ExplorationResult(ExplorationState.Moved, session.CurrentRoom, null, LootReward.Empty, "You move.");
+        }
 
         return EnterCurrentRoom(party, session);
     }

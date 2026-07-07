@@ -197,6 +197,9 @@ internal sealed class DomainPersistenceMapper
     {
         entity.Id = session.Id;
         entity.Seed = session.Map.Seed;
+        entity.LayoutId = session.LayoutId;
+        entity.ProfileId = session.ProfileId;
+        entity.LayoutSource = session.LayoutSource;
         entity.MinCoordinate = session.Map.MinCoordinate;
         entity.MaxCoordinate = session.Map.MaxCoordinate;
         entity.CurrentX = session.CurrentPosition.X;
@@ -221,6 +224,19 @@ internal sealed class DomainPersistenceMapper
             IsCleared = room.IsCleared,
             IsLooted = room.IsLooted
         }));
+        entity.Objects.Clear();
+        entity.Objects.AddRange(session.Objects.Select(worldObject => new WorldObjectEntity
+        {
+            WorldSessionId = session.Id,
+            ObjectId = worldObject.Id,
+            ObjectType = worldObject.ObjectType.ToString(),
+            X = worldObject.Position.X,
+            Y = worldObject.Position.Y,
+            IsBlocking = worldObject.IsBlocking,
+            State = worldObject.State.ToString(),
+            EncounterSeed = worldObject.EncounterSeed,
+            PayloadJson = worldObject.PayloadJson
+        }));
     }
 
     public WorldSession ToWorldSession(WorldSessionEntity entity)
@@ -232,13 +248,25 @@ internal sealed class DomainPersistenceMapper
             room.IsVisited,
             room.IsCleared,
             room.IsLooted));
+        var objects = entity.Objects.Select(worldObject => new WorldObject(
+            worldObject.ObjectId,
+            Enum.Parse<WorldObjectType>(worldObject.ObjectType),
+            new WorldPosition(worldObject.X, worldObject.Y),
+            worldObject.IsBlocking,
+            Enum.Parse<WorldObjectState>(worldObject.State),
+            worldObject.EncounterSeed,
+            worldObject.PayloadJson));
         var map = new WorldMap(entity.Seed, entity.MinCoordinate, entity.MaxCoordinate, rooms);
 
         return new WorldSession(
             map,
             new WorldPosition(entity.CurrentX, entity.CurrentY),
             entity.IsCompleted,
-            entity.Id);
+            entity.Id,
+            entity.LayoutId,
+            entity.ProfileId,
+            entity.LayoutSource,
+            objects);
     }
 
     private StatSet CreateStatSet(PartyMemberEntity entity)

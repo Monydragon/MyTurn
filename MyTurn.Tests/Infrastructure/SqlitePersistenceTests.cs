@@ -126,6 +126,55 @@ public sealed class SqlitePersistenceTests
     }
 
     [Test]
+    public void SaveAndLoad_PreservesWorldObjectsAndLayoutMetadata()
+    {
+        var services = SqliteApplicationServices.Create(_databasePath);
+        var actor = CreateActor(services);
+        var gameSession = services.GamePersistence!.CreateSave(actor);
+        var chest = new WorldObject(
+            "chest-1",
+            WorldObjectType.Treasure,
+            new WorldPosition(1, 0),
+            payloadJson: "{\"currency\":\"12\"}");
+        var door = new WorldObject(
+            "door-1",
+            WorldObjectType.Door,
+            new WorldPosition(1, -1),
+            isBlocking: true);
+        var world = new WorldSession(
+            CreateMap(new Dictionary<WorldPosition, RoomType>
+            {
+                [new(0, 0)] = RoomType.Start,
+                [new(1, 0)] = RoomType.Empty,
+                [new(1, -1)] = RoomType.Empty,
+                [new(2, 0)] = RoomType.Exit
+            }),
+            layoutId: "layout-1",
+            profileId: "profile-1",
+            layoutSource: "test",
+            objects: [chest, door]);
+
+        chest.MarkCollected();
+        door.MarkOpened();
+
+        gameSession = gameSession with { ActiveWorldSession = world };
+        services.GamePersistence.Save(gameSession);
+
+        var loaded = services.GamePersistence.LoadSave(gameSession.SaveSlotId);
+        var loadedWorld = loaded.ActiveWorldSession!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(loadedWorld.LayoutId, Is.EqualTo("layout-1"));
+            Assert.That(loadedWorld.ProfileId, Is.EqualTo("profile-1"));
+            Assert.That(loadedWorld.LayoutSource, Is.EqualTo("test"));
+            Assert.That(loadedWorld.Objects.Single(obj => obj.Id == "chest-1").State, Is.EqualTo(WorldObjectState.Collected));
+            Assert.That(loadedWorld.Objects.Single(obj => obj.Id == "door-1").State, Is.EqualTo(WorldObjectState.Opened));
+            Assert.That(loadedWorld.Objects.Single(obj => obj.Id == "door-1").IsBlocking, Is.False);
+        });
+    }
+
+    [Test]
     public void Save_ReloadsLatestProgressAfterRewardGearTreasureAndMovement()
     {
         var services = SqliteApplicationServices.Create(_databasePath);
@@ -258,6 +307,18 @@ public sealed class SqlitePersistenceTests
         }
 
         throw new InvalidOperationException("Could not find a deterministic test seed with adjacent treasure.");
+    }
+
+    private static WorldMap CreateMap(IReadOnlyDictionary<WorldPosition, RoomType> rooms)
+    {
+        var minCoordinate = rooms.Keys.Min(position => Math.Min(position.X, position.Y));
+        var maxCoordinate = rooms.Keys.Max(position => Math.Max(position.X, position.Y));
+
+        return new WorldMap(
+            42,
+            minCoordinate,
+            maxCoordinate,
+            rooms.Select(room => new WorldRoom(room.Key, room.Value)));
     }
 
     private static void DeleteIfExists(string path)

@@ -8,6 +8,7 @@ x64/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 artifacts/
+artifacts/render-captures/
 publish/
 
 # Test output and coverage

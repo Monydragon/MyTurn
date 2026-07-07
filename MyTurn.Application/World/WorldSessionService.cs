@@ -35,7 +35,10 @@ public sealed class WorldSessionService : IWorldSessionService
     {
         ArgumentNullException.ThrowIfNull(party);
 
-        var session = new WorldSession(_worldGenerator.Generate(new WorldGenerationRequest(seed)));
+        var request = new WorldGenerationRequest(seed);
+        var session = _worldGenerator is IWorldLayoutGenerator layoutGenerator
+            ? CreateFromLayout(layoutGenerator.GenerateLayout(request))
+            : new WorldSession(_worldGenerator.Generate(request));
         _sessions[party.Id] = session;
 
         return session;
@@ -47,5 +50,17 @@ public sealed class WorldSessionService : IWorldSessionService
         ArgumentNullException.ThrowIfNull(session);
 
         _sessions[party.Id] = session;
+    }
+
+    private static WorldSession CreateFromLayout(WorldLayout layout)
+    {
+        return new WorldSession(
+            layout.Map,
+            layout.Map.StartPosition,
+            isCompleted: false,
+            layoutId: layout.LayoutId,
+            profileId: layout.ProfileId,
+            layoutSource: layout.LayoutSource,
+            objects: layout.Objects);
     }
 }

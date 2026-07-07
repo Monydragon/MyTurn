@@ -9,12 +9,15 @@ namespace MyTurn.Infrastructure;
 
 public static class SqliteApplicationServices
 {
-    public static ApplicationServices CreateDefault()
+    public static ApplicationServices CreateDefault(IWorldGenerator? worldGeneratorOverride = null)
     {
-        return Create(GetDefaultDatabasePath(), migrateDatabase: true);
+        return Create(GetDefaultDatabasePath(), migrateDatabase: true, worldGeneratorOverride);
     }
 
-    public static ApplicationServices Create(string databasePath, bool migrateDatabase = true)
+    public static ApplicationServices Create(
+        string databasePath,
+        bool migrateDatabase = true,
+        IWorldGenerator? worldGeneratorOverride = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
 
@@ -27,10 +30,13 @@ public static class SqliteApplicationServices
 
         var options = CreateOptions(CreateConnectionString(databasePath));
 
-        return Create(options, migrateDatabase);
+        return Create(options, migrateDatabase, worldGeneratorOverride);
     }
 
-    public static ApplicationServices Create(DbContextOptions<MyTurnDbContext> options, bool migrateDatabase)
+    public static ApplicationServices Create(
+        DbContextOptions<MyTurnDbContext> options,
+        bool migrateDatabase,
+        IWorldGenerator? worldGeneratorOverride = null)
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -67,7 +73,7 @@ public static class SqliteApplicationServices
         var encounterGenerator = new EncounterGenerator(catalog.EnemyDefinitions);
         var combatService = new CombatService(equipmentService, catalog.ItemDefinitions, lootService, statDefinitions);
         var treasureLootService = new TreasureLootService(catalog.ItemDefinitions);
-        var worldGenerator = new WorldGenerator();
+        var worldGenerator = worldGeneratorOverride ?? new WorldGenerator();
         var worldSessionService = new WorldSessionService(worldGenerator);
         var explorationService = new WorldExplorationService(encounterGenerator, treasureLootService);
         var minimapService = new MinimapService();

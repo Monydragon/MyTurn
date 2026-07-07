@@ -1,3 +1,5 @@
+using MyTurn.Presentation.Input;
+
 namespace MyTurn.Console.Input;
 
 public sealed class ConsoleKeyboardInputSource : IInputSource

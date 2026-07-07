@@ -1,4 +1,4 @@
-namespace MyTurn.Console.Input;
+namespace MyTurn.Presentation.Input;
 
 public sealed class InputSnapshot
 {

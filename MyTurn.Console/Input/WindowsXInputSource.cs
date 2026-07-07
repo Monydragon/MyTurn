@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using MyTurn.Presentation.Input;
 
 namespace MyTurn.Console.Input;
 

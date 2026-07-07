@@ -25,6 +25,7 @@ public sealed class MyTurnDbContext : DbContext
     public DbSet<PartyMemberEquipmentEntity> PartyMemberEquipment => Set<PartyMemberEquipmentEntity>();
     public DbSet<WorldSessionEntity> WorldSessions => Set<WorldSessionEntity>();
     public DbSet<WorldRoomEntity> WorldRooms => Set<WorldRoomEntity>();
+    public DbSet<WorldObjectEntity> WorldObjects => Set<WorldObjectEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -193,10 +194,17 @@ public sealed class MyTurnDbContext : DbContext
         modelBuilder.Entity<WorldSessionEntity>(entity =>
         {
             entity.HasKey(session => session.Id);
+            entity.Property(session => session.LayoutId).HasMaxLength(128);
+            entity.Property(session => session.ProfileId).HasMaxLength(128);
+            entity.Property(session => session.LayoutSource).HasMaxLength(256);
             entity.HasIndex(session => new { session.SaveSlotId, session.IsCompleted });
             entity.HasMany(session => session.Rooms)
                 .WithOne(room => room.WorldSession)
                 .HasForeignKey(room => room.WorldSessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(session => session.Objects)
+                .WithOne(worldObject => worldObject.WorldSession)
+                .HasForeignKey(worldObject => worldObject.WorldSessionId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -205,6 +213,17 @@ public sealed class MyTurnDbContext : DbContext
             entity.HasKey(room => room.Id);
             entity.Property(room => room.RoomType).HasMaxLength(64).IsRequired();
             entity.HasIndex(room => new { room.WorldSessionId, room.X, room.Y }).IsUnique();
+        });
+
+        modelBuilder.Entity<WorldObjectEntity>(entity =>
+        {
+            entity.HasKey(worldObject => worldObject.Id);
+            entity.Property(worldObject => worldObject.ObjectId).HasMaxLength(128).IsRequired();
+            entity.Property(worldObject => worldObject.ObjectType).HasMaxLength(64).IsRequired();
+            entity.Property(worldObject => worldObject.State).HasMaxLength(64).IsRequired();
+            entity.Property(worldObject => worldObject.PayloadJson).IsRequired();
+            entity.HasIndex(worldObject => new { worldObject.WorldSessionId, worldObject.ObjectId }).IsUnique();
+            entity.HasIndex(worldObject => new { worldObject.WorldSessionId, worldObject.X, worldObject.Y });
         });
     }
 }

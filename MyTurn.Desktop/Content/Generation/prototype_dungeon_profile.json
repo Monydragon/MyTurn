@@ -1,0 +1,25 @@
+{
+  "id": "prototype-dungeon",
+  "gridColumns": 4,
+  "gridRows": 4,
+  "placedRooms": 10,
+  "roomTileWidth": 9,
+  "roomTileHeight": 7,
+  "enemyWeight": 0.30,
+  "treasureWeight": 0.18,
+  "hazardWeight": 0.12,
+  "lockedDoorWeight": 0.10,
+  "branchChance": 0.35,
+  "loopChance": 0.15,
+  "templates": [
+    { "id": "start", "path": "../Rooms/start_room.tmj", "tags": [ "start" ] },
+    { "id": "corridor", "path": "../Rooms/corridor_room.tmj", "tags": [ "corridor" ] },
+    { "id": "enemy", "path": "../Rooms/enemy_room.tmj", "tags": [ "enemy" ] },
+    { "id": "treasure", "path": "../Rooms/treasure_room.tmj", "tags": [ "treasure" ] },
+    { "id": "hazard", "path": "../Rooms/hazard_room.tmj", "tags": [ "hazard" ] },
+    { "id": "locked-door", "path": "../Rooms/locked_door_room.tmj", "tags": [ "locked-door" ] },
+    { "id": "key", "path": "../Rooms/key_room.tmj", "tags": [ "key" ] },
+    { "id": "npc", "path": "../Rooms/npc_room.tmj", "tags": [ "npc" ] },
+    { "id": "exit", "path": "../Rooms/exit_room.tmj", "tags": [ "exit" ] }
+  ]
+}

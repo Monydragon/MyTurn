@@ -1,6 +1,8 @@
 using MyTurn.Application;
 using MyTurn.Console.Input;
 using MyTurn.Domain;
+using MyTurn.Presentation;
+using MyTurn.Presentation.Input;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -8,6 +10,37 @@ namespace MyTurn.Console;
 
 internal static class ActorConsoleRenderer
 {
+    public static void Show(GameViewModel view, InputSnapshot snapshot)
+    {
+        switch (view)
+        {
+            case MainMenuViewModel mainMenu:
+                ShowMainMenu(mainMenu, snapshot);
+                break;
+            case LoadGameViewModel loadGame:
+                ShowLoadGame(loadGame, snapshot);
+                break;
+            case HubViewModel hub:
+                ShowHub(hub, snapshot);
+                break;
+            case WorldViewModel world:
+                ShowWorld(world, snapshot);
+                break;
+            case CombatViewModel combat:
+                ShowCombat(combat, snapshot);
+                break;
+            case PartyViewModel party:
+                ShowPartyView(party, snapshot);
+                break;
+            case InventoryViewModel inventory:
+                ShowInventoryView(inventory, snapshot);
+                break;
+            case MessageViewModel message:
+                ShowMessage(message, snapshot);
+                break;
+        }
+    }
+
     public static void ShowTitle()
     {
         AnsiConsole.Write(new Rule("[bold yellow]My Turn[/]").RuleStyle("grey"));
@@ -53,6 +86,163 @@ internal static class ActorConsoleRenderer
     {
         AnsiConsole.MarkupLineInterpolated(
             $"[green]Save loaded![/] Leader: [yellow]{party.Leader.Name}[/], Active Members: [yellow]{party.ActiveMembers.Count}[/], Steps: [yellow]{party.Steps}[/]");
+    }
+
+    private static void ShowMainMenu(MainMenuViewModel view, InputSnapshot snapshot)
+    {
+        AnsiConsole.Clear();
+        ShowTitle();
+        AnsiConsole.Write(BuildMenuPanel("Main Menu", view.Options));
+        ConsoleMenu.RenderFooter("[grey]Move:[/] D-pad/left stick or WASD/arrows  [grey]Select:[/] A/Enter", snapshot);
+    }
+
+    private static void ShowLoadGame(LoadGameViewModel view, InputSnapshot snapshot)
+    {
+        AnsiConsole.Clear();
+        AnsiConsole.Write(new Rule("[bold yellow]Load Game[/]").RuleStyle("grey"));
+        AnsiConsole.Write(BuildMenuPanel("Saves", view.Options));
+        ConsoleMenu.RenderFooter("[grey]Move:[/] D-pad/left stick or WASD/arrows  [grey]Load:[/] A/Enter  [grey]Back:[/] B/Esc", snapshot);
+    }
+
+    private static void ShowHub(HubViewModel view, InputSnapshot snapshot)
+    {
+        AnsiConsole.Clear();
+        AnsiConsole.Write(new Rule("[bold yellow]Camp[/]").RuleStyle("grey"));
+
+        var layout = new Grid();
+        layout.AddColumn();
+        layout.AddColumn();
+        layout.AddRow(new IRenderable[]
+        {
+            BuildPartySummaryPanel(view.Party),
+            BuildMenuPanel("Actions", view.Options)
+        });
+
+        AnsiConsole.Write(layout);
+        ConsoleMenu.RenderFooter("[grey]Move:[/] D-pad/left stick or WASD/arrows  [grey]Select:[/] A/Enter  [grey]Back:[/] B/Esc", snapshot);
+    }
+
+    private static void ShowWorld(WorldViewModel view, InputSnapshot snapshot)
+    {
+        AnsiConsole.Clear();
+        AnsiConsole.Write(new Rule($"[bold green]World Seed {view.Seed}[/]").RuleStyle("grey"));
+
+        var worldView = new Grid();
+        worldView.AddColumn();
+        worldView.AddColumn();
+        worldView.AddRow(new IRenderable[]
+        {
+            BuildMapPanel(view),
+            BuildWorldStatusPanel(view)
+        });
+
+        AnsiConsole.Write(worldView);
+
+        var footer = view.HasPendingEncounter
+            ? "[grey]Start Battle:[/] A/Enter  [grey]Hub:[/] B/Start/Esc"
+            : "[grey]Move:[/] D-pad/left stick or WASD/arrows  [grey]Hub:[/] B/Start/Esc";
+        ConsoleMenu.RenderFooter(footer, snapshot);
+    }
+
+    private static void ShowCombat(CombatViewModel view, InputSnapshot snapshot)
+    {
+        AnsiConsole.Clear();
+        AnsiConsole.Write(new Rule($"[bold red]Battle Seed {view.Seed}[/]").RuleStyle("grey"));
+
+        var topGrid = new Grid();
+        topGrid.AddColumn();
+        topGrid.AddColumn();
+        topGrid.AddRow(new IRenderable[]
+        {
+            BuildCombatantPanel("Enemies", view.Enemies, Color.Red),
+            BuildCombatantPanel("Party", view.Party, Color.Green)
+        });
+
+        var bottomGrid = new Grid();
+        bottomGrid.AddColumn();
+        bottomGrid.AddColumn();
+        bottomGrid.AddRow(new IRenderable[]
+        {
+            BuildBattleLogPanel(view.BattleLog),
+            BuildCombatInfoPanel(view)
+        });
+
+        AnsiConsole.Write(topGrid);
+        AnsiConsole.Write(bottomGrid);
+
+        var activeOptions = view.CommandOptions.Count > 0 ? view.CommandOptions :
+            view.TargetOptions.Count > 0 ? view.TargetOptions :
+            view.ItemOptions.Count > 0 ? view.ItemOptions :
+            view.GearOptions;
+
+        if (activeOptions.Count > 0)
+        {
+            AnsiConsole.Write(BuildMenuPanel("Actions", activeOptions));
+        }
+
+        if (!string.IsNullOrWhiteSpace(view.OutcomeText))
+        {
+            AnsiConsole.Write(new Panel(Markup.Escape(view.OutcomeText)).Header(view.OutcomeTitle ?? "Outcome").BorderColor(Color.Green));
+        }
+
+        ConsoleMenu.RenderFooter("[grey]Navigate:[/] D-pad/left stick or WASD/arrows  [grey]Select:[/] A/Enter  [grey]Back:[/] B/Esc", snapshot);
+    }
+
+    private static void ShowPartyView(PartyViewModel view, InputSnapshot snapshot)
+    {
+        AnsiConsole.Clear();
+        AnsiConsole.Write(new Rule($"[bold yellow]{Markup.Escape(view.Title)}[/]").RuleStyle("grey"));
+
+        var table = new Table()
+            .AddColumn("Status")
+            .AddColumn("Name")
+            .AddColumn("Class")
+            .AddColumn(new TableColumn("HP").RightAligned())
+            .AddColumn("Weapon");
+
+        foreach (var member in view.Members)
+        {
+            table.AddRow(
+                Markup.Escape(member.Location),
+                Markup.Escape(member.Name),
+                Markup.Escape(member.ClassName),
+                $"{member.CurrentHealth}/{member.MaxHealth}",
+                Markup.Escape(member.WeaponName));
+        }
+
+        AnsiConsole.Write(table);
+        ConsoleMenu.RenderFooter("[grey]Continue:[/] A/Enter  [grey]Back:[/] B/Esc", snapshot);
+    }
+
+    private static void ShowInventoryView(InventoryViewModel view, InputSnapshot snapshot)
+    {
+        AnsiConsole.Clear();
+        AnsiConsole.Write(new Rule("[bold yellow]Inventory[/]").RuleStyle("grey"));
+
+        var table = new Table()
+            .AddColumn("Item")
+            .AddColumn("Kind")
+            .AddColumn(new TableColumn("Qty").RightAligned());
+
+        table.AddRow("Currency", "Currency", view.Currency.ToString());
+
+        foreach (var item in view.Items)
+        {
+            table.AddRow(Markup.Escape(item.Name), Markup.Escape(item.Kind), item.Quantity.ToString());
+        }
+
+        AnsiConsole.Write(table);
+        ConsoleMenu.RenderFooter("[grey]Continue:[/] A/Enter  [grey]Back:[/] B/Esc", snapshot);
+    }
+
+    private static void ShowMessage(MessageViewModel view, InputSnapshot snapshot)
+    {
+        AnsiConsole.Clear();
+        AnsiConsole.Write(
+            new Panel(Markup.Escape(view.Message))
+                .Header(Markup.Escape(view.Title))
+                .BorderColor(Color.Yellow));
+        ConsoleMenu.RenderFooter("[grey]Continue:[/] A/Enter  [grey]Back:[/] B/Esc", snapshot);
     }
 
     public static void ShowHub(Party party, IReadOnlyList<string> options, int selectedIndex, InputSnapshot snapshot)
@@ -405,7 +595,10 @@ internal static class ActorConsoleRenderer
         });
 
         AnsiConsole.Write(worldView);
-        ConsoleMenu.RenderFooter("[grey]Move:[/] D-pad/left stick or WASD/arrows  [grey]Hub:[/] B/Start/Esc", snapshot ?? InputSnapshot.Empty);
+        var footer = result?.State == ExplorationState.EnemyEncounter
+            ? "[grey]Start Battle:[/] A/Enter  [grey]Hub:[/] B/Start/Esc"
+            : "[grey]Move:[/] D-pad/left stick or WASD/arrows  [grey]Hub:[/] B/Start/Esc";
+        ConsoleMenu.RenderFooter(footer, snapshot ?? InputSnapshot.Empty);
     }
 
     public static void ShowWorldMessage(ExplorationResult result)
@@ -438,6 +631,168 @@ internal static class ActorConsoleRenderer
             new Panel($"World Seed: {session.Map.Seed}{Environment.NewLine}Exit: X {session.CurrentPosition.X}, Y {session.CurrentPosition.Y}")
                 .Header("World Complete")
                 .BorderColor(Color.Green));
+    }
+
+    private static Panel BuildMenuPanel(string title, IReadOnlyList<MenuOptionViewModel> options)
+    {
+        var table = new Table()
+            .NoBorder()
+            .AddColumn(" ")
+            .AddColumn("Option")
+            .AddColumn("Details");
+
+        foreach (var option in options)
+        {
+            var marker = option.IsSelected ? "[bold yellow]>[/]" : " ";
+            var label = option.IsSelected
+                ? $"[bold yellow]{Markup.Escape(option.Label)}[/]"
+                : Markup.Escape(option.Label);
+            table.AddRow(marker, label, Markup.Escape(option.Detail ?? string.Empty));
+        }
+
+        return new Panel(table)
+            .Header(title)
+            .BorderColor(Color.Blue);
+    }
+
+    private static Panel BuildPartySummaryPanel(PartySummaryViewModel party)
+    {
+        var table = new Table()
+            .NoBorder()
+            .AddColumn("Name")
+            .AddColumn("Class")
+            .AddColumn(new TableColumn("HP").RightAligned());
+
+        foreach (var member in party.ActiveMembers)
+        {
+            table.AddRow(
+                Markup.Escape(member.Name),
+                Markup.Escape(member.ClassName),
+                $"{member.CurrentHealth}/{member.MaxHealth}");
+        }
+
+        table.AddEmptyRow();
+        table.AddRow("[grey]Leader[/]", string.Empty, Markup.Escape(party.LeaderName));
+        table.AddRow("[grey]Currency[/]", string.Empty, party.Currency.ToString());
+        table.AddRow("[grey]Steps[/]", string.Empty, party.Steps.ToString());
+
+        return new Panel(table)
+            .Header("Party")
+            .BorderColor(Color.Green);
+    }
+
+    private static Panel BuildMapPanel(WorldViewModel view)
+    {
+        var mapGrid = new Grid();
+
+        for (var x = view.MinCoordinate; x <= view.MaxCoordinate; x++)
+        {
+            mapGrid.AddColumn();
+        }
+
+        for (var y = view.MaxCoordinate; y >= view.MinCoordinate; y--)
+        {
+            var row = Enumerable.Range(view.MinCoordinate, view.MaxCoordinate - view.MinCoordinate + 1)
+                .Select(x => FormatMapCell(view, new WorldPosition(x, y)))
+                .ToArray();
+            mapGrid.AddRow(row);
+        }
+
+        return new Panel(mapGrid)
+            .Header("Map")
+            .BorderColor(Color.Green);
+    }
+
+    private static Panel BuildWorldStatusPanel(WorldViewModel view)
+    {
+        var status = new Table()
+            .NoBorder()
+            .AddColumn("Field")
+            .AddColumn("Value")
+            .AddRow("[grey]Leader[/]", $"[yellow]{Markup.Escape(view.Party.LeaderName)}[/]")
+            .AddRow("[grey]Active[/]", $"[yellow]{view.Party.ActiveCount}[/]/[grey]{view.Party.MaxActiveCount}[/]")
+            .AddRow("[grey]Position[/]", $"[white]X {view.CurrentPosition.X}, Y {view.CurrentPosition.Y}[/]")
+            .AddRow("[grey]Room[/]", Markup.Escape(view.RoomType))
+            .AddRow("[grey]Status[/]", Markup.Escape(view.RoomStatus))
+            .AddRow("[grey]Steps[/]", $"[yellow]{view.Party.Steps}[/]");
+
+        var panelGrid = new Grid();
+        panelGrid.AddColumn();
+        panelGrid.AddRow(new IRenderable[] { status });
+
+        if (!string.IsNullOrWhiteSpace(view.LatestEvent))
+        {
+            panelGrid.AddEmptyRow();
+            panelGrid.AddRow(new IRenderable[]
+            {
+                new Panel(Markup.Escape(view.LatestEvent))
+                    .Header("Event")
+                    .BorderColor(view.HasPendingEncounter ? Color.Red : Color.Yellow)
+            });
+        }
+
+        return new Panel(panelGrid)
+            .Header("Status")
+            .BorderColor(view.HasPendingEncounter ? Color.Red : Color.Grey);
+    }
+
+    private static Panel BuildCombatantPanel(string title, IReadOnlyList<CombatantViewModel> combatants, Color color)
+    {
+        var table = new Table()
+            .NoBorder()
+            .AddColumn(title.TrimEnd('s'))
+            .AddColumn(new TableColumn("HP").RightAligned())
+            .AddColumn("Status");
+
+        foreach (var combatant in combatants)
+        {
+            var name = combatant.IsActive
+                ? $"[bold yellow]> {Markup.Escape(combatant.Name)}[/]"
+                : combatant.IsAlive ? Markup.Escape(combatant.Name) : $"[grey]{Markup.Escape(combatant.Name)}[/]";
+            var status = !combatant.IsAlive ? "[red]Defeated[/]" : combatant.IsDefending ? "[yellow]Guard[/]" : "[grey]Ready[/]";
+            table.AddRow(name, FormatHpBar(combatant.CurrentHealth, combatant.MaxHealth), status);
+        }
+
+        return new Panel(table)
+            .Header(title)
+            .BorderColor(color);
+    }
+
+    private static Panel BuildCombatInfoPanel(CombatViewModel view)
+    {
+        var details = new Table()
+            .NoBorder()
+            .AddColumn("Field")
+            .AddColumn("Value")
+            .AddRow("[grey]Turn[/]", Markup.Escape(view.ActiveCombatantName ?? "Resolving"))
+            .AddRow("[grey]Team[/]", view.ActiveTeam?.GetDisplayName() ?? "None")
+            .AddRow("[grey]Enemies[/]", view.Enemies.Count(enemy => enemy.IsAlive).ToString())
+            .AddRow("[grey]Allies[/]", view.Party.Count(member => member.IsAlive).ToString());
+
+        return new Panel(details)
+            .Header("Battle")
+            .BorderColor(Color.Blue);
+    }
+
+    private static string FormatMapCell(WorldViewModel view, WorldPosition position)
+    {
+        var cell = view.Cells.FirstOrDefault(cell => cell.Position == position);
+
+        if (cell is null || !cell.IsVisible)
+        {
+            return "[black on black]   [/]";
+        }
+
+        return cell.Symbol switch
+        {
+            '@' => "[bold white on green] @ [/]",
+            'S' => "[bold white on blue] S [/]",
+            'E' => "[bold white on purple] E [/]",
+            '!' => "[bold white on red] ! [/]",
+            '$' => "[bold black on yellow] $ [/]",
+            '?' => "[grey on black] ? [/]",
+            _ => "[white on black] . [/]"
+        };
     }
 
     private static Table BuildCharacterTable(

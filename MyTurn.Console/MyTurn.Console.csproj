@@ -11,6 +11,7 @@
     <ItemGroup>
         <ProjectReference Include="..\MyTurn.Application\MyTurn.Application.csproj" />
         <ProjectReference Include="..\MyTurn.Infrastructure\MyTurn.Infrastructure.csproj" />
+        <ProjectReference Include="..\MyTurn.Presentation\MyTurn.Presentation.csproj" />
     </ItemGroup>
 
     <ItemGroup>

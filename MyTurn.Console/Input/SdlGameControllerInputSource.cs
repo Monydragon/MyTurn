@@ -1,4 +1,5 @@
 using SDL2;
+using MyTurn.Presentation.Input;
 
 namespace MyTurn.Console.Input;
 

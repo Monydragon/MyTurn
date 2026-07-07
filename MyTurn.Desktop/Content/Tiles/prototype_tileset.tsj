@@ -1,0 +1,129 @@
+{
+  "type": "tileset",
+  "tiledversion": "1.11.0",
+  "version": "1.10",
+  "name": "prototype_tileset",
+  "tilewidth": 16,
+  "tileheight": 16,
+  "tilecount": 16,
+  "columns": 4,
+  "image": "prototype_tileset.png",
+  "imagewidth": 64,
+  "imageheight": 64,
+  "tiles": [
+    {
+      "id": 0,
+      "type": "floor",
+      "properties": [
+        { "name": "type", "type": "string", "value": "floor" }
+      ]
+    },
+    {
+      "id": 1,
+      "type": "wall",
+      "properties": [
+        { "name": "type", "type": "string", "value": "wall" },
+        { "name": "blocked", "type": "bool", "value": true }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "path",
+      "properties": [
+        { "name": "type", "type": "string", "value": "path" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "water",
+      "properties": [
+        { "name": "type", "type": "string", "value": "water" },
+        { "name": "blocked", "type": "bool", "value": true }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "spawn",
+      "properties": [
+        { "name": "event", "type": "string", "value": "spawn" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "enemy",
+      "properties": [
+        { "name": "event", "type": "string", "value": "enemy" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "treasure",
+      "properties": [
+        { "name": "event", "type": "string", "value": "treasure" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "exit",
+      "properties": [
+        { "name": "event", "type": "string", "value": "exit" }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "door",
+      "properties": [
+        { "name": "event", "type": "string", "value": "door" }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "locked-door",
+      "properties": [
+        { "name": "event", "type": "string", "value": "locked-door" }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "key",
+      "properties": [
+        { "name": "event", "type": "string", "value": "key" }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "pickup",
+      "properties": [
+        { "name": "event", "type": "string", "value": "pickup" }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "hazard",
+      "properties": [
+        { "name": "event", "type": "string", "value": "hazard" }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "npc",
+      "properties": [
+        { "name": "event", "type": "string", "value": "npc" }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "sign",
+      "properties": [
+        { "name": "event", "type": "string", "value": "sign" }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "blocking-prop",
+      "properties": [
+        { "name": "event", "type": "string", "value": "blocking-prop" }
+      ]
+    }
+  ]
+}

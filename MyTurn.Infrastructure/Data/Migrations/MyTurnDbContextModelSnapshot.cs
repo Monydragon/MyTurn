@@ -436,6 +436,56 @@ namespace MyTurn.Infrastructure.Data.Migrations
                     b.ToTable("SaveSlots");
                 });
 
+            modelBuilder.Entity("MyTurn.Infrastructure.Data.Entities.WorldObjectEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("EncounterSeed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsBlocking")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ObjectId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ObjectType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorldSessionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("X")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Y")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorldSessionId", "ObjectId")
+                        .IsUnique();
+
+                    b.HasIndex("WorldSessionId", "X", "Y");
+
+                    b.ToTable("WorldObjects");
+                });
+
             modelBuilder.Entity("MyTurn.Infrastructure.Data.Entities.WorldRoomEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -494,11 +544,23 @@ namespace MyTurn.Infrastructure.Data.Migrations
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("LayoutId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LayoutSource")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("MaxCoordinate")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("MinCoordinate")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("ProfileId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("SaveSlotId")
                         .HasColumnType("TEXT");
@@ -653,6 +715,17 @@ namespace MyTurn.Infrastructure.Data.Migrations
                     b.Navigation("PartyMember");
                 });
 
+            modelBuilder.Entity("MyTurn.Infrastructure.Data.Entities.WorldObjectEntity", b =>
+                {
+                    b.HasOne("MyTurn.Infrastructure.Data.Entities.WorldSessionEntity", "WorldSession")
+                        .WithMany("Objects")
+                        .HasForeignKey("WorldSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("WorldSession");
+                });
+
             modelBuilder.Entity("MyTurn.Infrastructure.Data.Entities.WorldRoomEntity", b =>
                 {
                     b.HasOne("MyTurn.Infrastructure.Data.Entities.WorldSessionEntity", "WorldSession")
@@ -711,6 +784,8 @@ namespace MyTurn.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("MyTurn.Infrastructure.Data.Entities.WorldSessionEntity", b =>
                 {
+                    b.Navigation("Objects");
+
                     b.Navigation("Rooms");
                 });
 #pragma warning restore 612, 618

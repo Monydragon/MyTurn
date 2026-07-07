@@ -169,6 +169,7 @@ public sealed class SqliteGamePersistenceService : IGamePersistenceService
 
         var worldSession = db.WorldSessions
             .Include(world => world.Rooms)
+            .Include(world => world.Objects)
             .SingleOrDefault(world => world.Id == activeWorldSession.Id);
 
         if (worldSession is null)
@@ -178,6 +179,7 @@ public sealed class SqliteGamePersistenceService : IGamePersistenceService
         else
         {
             db.WorldRooms.RemoveRange(worldSession.Rooms);
+            db.WorldObjects.RemoveRange(worldSession.Objects);
             _mapper.UpdateWorldSessionEntity(worldSession, activeWorldSession);
         }
     }
@@ -190,6 +192,7 @@ public sealed class SqliteGamePersistenceService : IGamePersistenceService
             .Include(slot => slot.PartyMembers).ThenInclude(member => member.Skills)
             .Include(slot => slot.PartyMembers).ThenInclude(member => member.Equipment)
             .Include(slot => slot.WorldSessions).ThenInclude(world => world.Rooms)
+            .Include(slot => slot.WorldSessions).ThenInclude(world => world.Objects)
             .SingleOrDefault(slot => slot.Id == saveSlotId);
     }
 }
